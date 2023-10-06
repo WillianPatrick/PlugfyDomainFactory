@@ -24,32 +24,9 @@ error NotTokenAdmin(address currentAdminAddress);
 library LibDomain {
     bytes32 constant DOMAIN_STORAGE_POSITION = keccak256("domain.standard.domain.storage");
     bytes32 constant DEFAULT_ADMIN_ROLE = keccak256("DEFAULT_ADMIN_ROLE");
+
     event OwnershipTransferred(address previousOwner, address _newOwner);
     event AdminshipTransferred(address indexed previousAdmin, address indexed newAdmin);
-
-    function enforceIsTokenAdmin() internal view {
-        if(msg.sender != domainStorage(DOMAIN_STORAGE_POSITION).superAdmin) {
-            revert NotTokenAdmin(domainStorage(DOMAIN_STORAGE_POSITION).superAdmin);
-        }        
-    }
-
-    function enforceIsTokenAdmin(bytes32 storageKey) internal view {
-        if(msg.sender != domainStorage(storageKey).superAdmin) {
-            revert NotTokenAdmin(domainStorage(storageKey).superAdmin);
-        }        
-    }
-
-    function setAdmin(address _newAdmin, bytes32 storageKey) internal {
-        address previousAdmin = domainStorage(storageKey).superAdmin;
-        domainStorage(storageKey).superAdmin = _newAdmin;
-        domainStorage(storageKey).accessControl[DEFAULT_ADMIN_ROLE][_newAdmin] = true;
-        //domainStorage(storageKey).roleAdmins[DEFAULT_ADMIN_ROLE] = _newAdmin;
-        emit AdminshipTransferred(previousAdmin, _newAdmin);
-    }
-
-    function setAdmin(address _newAdmin) internal {
-        setAdmin(_newAdmin, DOMAIN_STORAGE_POSITION);
-    }    
 
     struct AppAddressAndSelectorPosition {
         address appAddress;
@@ -57,6 +34,9 @@ library LibDomain {
     }
 
     struct DomainStorage {
+        mapping(address => DomainStorage) domainStorage;
+        address[] domains;
+        mapping(address => uint256) domainIdx;
         mapping(bytes4 => AppAddressAndSelectorPosition) appAddressAndSelectorPosition;
         bytes4[] selectors;
         mapping(address => bool) pausedApps;
@@ -67,7 +47,38 @@ library LibDomain {
         mapping(bytes32 => bytes32) roleAdmins; 
         mapping(bytes4 => bytes32) functionRoles;
         mapping(bytes32 => mapping(bytes32 => bytes32)) roles;
+        bool paused;
     }
+
+
+    function enforceIsTokenSuperAdmin() internal view {
+        if(msg.sender != domainStorage().superAdmin) {
+            revert NotTokenAdmin(domainStorage().superAdmin);
+        }        
+    }
+
+    function setSuperAdmin(address _newAdmin) internal {
+        enforceIsContractOwnerAdmin();
+        address previousAdmin = domainStorage().superAdmin;
+        domainStorage().superAdmin = _newAdmin;
+        domainStorage().accessControl[DEFAULT_ADMIN_ROLE][_newAdmin] = true;
+        emit AdminshipTransferred(previousAdmin, _newAdmin);
+    }
+
+    function getDomain(address _subDomainAddress) internal pure returns (IDomain) {
+        return IDomain(_subDomainAddress);
+    }
+
+    function deleteDomain(address _subDomainAddress) internal {
+        enforceIsContractOwnerAdmin();
+        delete domainStorage().domains[domainStorage().domainIdx[_subDomainAddress]];
+        delete domainStorage().domainStorage[_subDomainAddress];
+    }
+
+    function pauseDomain(address _subDomainAddress) internal {
+        enforceIsContractOwnerAdmin();
+        domainStorage().domainStorage[_subDomainAddress].paused = true;
+    }    
 
     function domainStorage() internal pure returns (DomainStorage storage ds) {
         bytes32 position = DOMAIN_STORAGE_POSITION;
@@ -76,50 +87,41 @@ library LibDomain {
         }
     }    
 
-    function domainStorage(bytes32 storageKey) internal pure returns (DomainStorage storage ds) {
+    function domainSecureStorage(bytes32 storageKey) internal pure returns (DomainStorage storage ds) {
         bytes32 position = storageKey;
         assembly {
             ds.slot := position
         }
     }
 
-    function setContractOwner(address _newOwner, bytes32 storageKey) internal {
-        DomainStorage storage ds = domainStorage(storageKey);
+    function setContractOwner(address _newOwner) internal {
+        enforceIsContractOwnerAdmin();
+        DomainStorage storage ds = domainStorage();
         address previousOwner = ds.contractOwner;
-        domainStorage(storageKey).contractOwner = _newOwner;
-        domainStorage(storageKey).accessControl[DEFAULT_ADMIN_ROLE][_newOwner] = true;   
+        domainStorage().contractOwner = _newOwner;
+        domainStorage().accessControl[DEFAULT_ADMIN_ROLE][_newOwner] = true;   
         emit OwnershipTransferred(previousOwner, _newOwner);
     }
 
-    function setContractOwner(address _newOwner) internal {
-        setContractOwner(_newOwner, DOMAIN_STORAGE_POSITION);
-    }    
-
-    function contractOwner(bytes32 storageKey) internal view returns (address contractOwner_) {
-        contractOwner_ = domainStorage(storageKey).contractOwner;
-    }
-
     function contractOwner() internal view returns (address contractOwner_) {
-        contractOwner_ = domainStorage(DOMAIN_STORAGE_POSITION).contractOwner;
-    }   
-
-    function contractAdmin(bytes32 storageKey) internal view returns (address contractAdmin_) {
-        contractAdmin_ = domainStorage(storageKey).superAdmin;
-    }   
-
-    function contractAdmin() internal view returns (address contractAdmin_) {
-        contractAdmin_ = domainStorage(DOMAIN_STORAGE_POSITION).superAdmin;
-    }   
-
-    function enforceIsContractOwner(bytes32 storageKey) internal view {
-        if(msg.sender != domainStorage(storageKey).contractOwner && msg.sender != domainStorage(storageKey).superAdmin) {
-            revert NotContractOwner(msg.sender, domainStorage(storageKey).contractOwner);
-        }        
+        contractOwner_ = domainStorage().contractOwner;
     }
+
+    function contractSuperAdmin() internal view returns (address contractAdmin_) {
+        contractAdmin_ = domainStorage().superAdmin;
+    }   
+
+    function enforceIsContractOwnerAdmin() internal view {
+        if(msg.sender != domainStorage().contractOwner && msg.sender != domainStorage().superAdmin) {
+            revert NotContractOwner(msg.sender, domainStorage().contractOwner);
+        }        
+    } 
 
     function enforceIsContractOwner() internal view {
-        enforceIsContractOwner(DOMAIN_STORAGE_POSITION);
-    }    
+        if(msg.sender != domainStorage().contractOwner) {
+            revert NotContractOwner(msg.sender, domainStorage().contractOwner);
+        }        
+    }     
 
     event AppManagerExecuted(IAppManager.App[] _apps, address _init, bytes _calldata);
 
@@ -156,7 +158,7 @@ library LibDomain {
         if(_AppAddress == address(0)) {
             revert CannotAddSelectorsToZeroAddress(_functionSelectors);
         }
-        DomainStorage storage ds = domainStorage(DOMAIN_STORAGE_POSITION);
+        DomainStorage storage ds = domainStorage();
         uint16 selectorCount = uint16(ds.selectors.length);                
         enforceHasContractCode(_AppAddress, "LibAppManager: Add app has no code");
         for (uint256 selectorIndex; selectorIndex < _functionSelectors.length; selectorIndex++) {
@@ -173,7 +175,7 @@ library LibDomain {
     }
 
     function replaceFunctions(address _AppAddress, bytes4[] memory _functionSelectors) internal {       
-        DomainStorage storage ds = domainStorage(DOMAIN_STORAGE_POSITION);
+        DomainStorage storage ds = domainStorage();
         if(_AppAddress == address(0)) {
             revert CannotReplaceFunctionsFromAppWithZeroAddress(_functionSelectors);
         }
@@ -197,7 +199,7 @@ library LibDomain {
     }
 
     function removeFunctions(address _AppAddress, bytes4[] memory _functionSelectors) internal {        
-        DomainStorage storage ds = domainStorage(DOMAIN_STORAGE_POSITION);
+        DomainStorage storage ds = domainStorage();
         uint256 selectorCount = ds.selectors.length;
         if(_AppAddress != address(0)) {
             revert RemoveAppAddressMustBeZeroAddress(_AppAddress);
