@@ -1,45 +1,49 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import { IDomain } from "../interfaces/IDomain.sol";
-import { IAppManager } from "../interfaces/IAppManager.sol";
+import { Domain } from "../Domain.sol";
+import { IPackagerManager } from "../apps/core/PackagerManager/IPackagerManager.sol";
+
+import { IPackagerRoutes } from "../apps/core/PackagerManager/IPackagerRoutes.sol";
 
 error NoSelectorsGivenToAdd();
 error NotContractOwner(address _user, address _contractOwner);
-error NoSelectorsProvidedForApp(address _appAddress);
+error NoSelectorsProvidedForPackager(address _packAddress);
 error CannotAddSelectorsToZeroAddress(bytes4[] _selectors);
 error NoBytecodeAtAddress(address _contractAddress, string _message);
-error IncorrectAppManagerAction(uint8 _action);
-error CannotAddFunctionToAppThatAlreadyExists(bytes4 _selector);
-error CannotReplaceFunctionsFromAppWithZeroAddress(bytes4[] _selectors);
+error IncorrectPackagerManagerAction(uint8 _action);
+error CannotAddFunctionToPackagerThatAlreadyExists(bytes4 _selector);
+error CannotReplaceFunctionsFromPackagerWithZeroAddress(bytes4[] _selectors);
 error CannotReplaceImmutableFunction(bytes4 _selector);
-error CannotReplaceFunctionWithTheSameFunctionFromTheSameApp(bytes4 _selector);
+error CannotReplaceFunctionWithTheSameFunctionFromTheSamePackager(bytes4 _selector);
 error CannotReplaceFunctionThatDoesNotExists(bytes4 _selector);
-error RemoveAppAddressMustBeZeroAddress(address _appAddress);
+error RemovePackagerAddressMustBeZeroAddress(address _packAddress);
 error CannotRemoveFunctionThatDoesNotExist(bytes4 _selector);
 error CannotRemoveImmutableFunction(bytes4 _selector);
 error InitializationFunctionReverted(address _initializationContractAddress, bytes _calldata);
 error NotTokenAdmin(address currentAdminAddress);
 
 library LibDomain {
-    bytes32 constant DOMAIN_STORAGE_POSITION = keccak256("domain.standard.domain.storage");
+    bytes32 constant DOMAIN_STORAGE_POSITION = keccak256("domain.standard.storage");
     bytes32 constant DEFAULT_ADMIN_ROLE = keccak256("DEFAULT_ADMIN_ROLE");
 
     event OwnershipTransferred(address previousOwner, address _newOwner);
     event AdminshipTransferred(address indexed previousAdmin, address indexed newAdmin);
+    event PackagerManagerExecuted(IPackagerManager.Packager[] _packs, address _init, bytes _calldata);
 
-    struct AppAddressAndSelectorPosition {
-        address appAddress;
+    struct PackagerAddressAndSelectorPosition {
+        address packAddress;
         uint16 selectorPosition;
     }
 
     struct DomainStorage {
-        mapping(address => DomainStorage) domainStorage;
+        address parentDomain;
+        string name;
         address[] domains;
         mapping(address => uint256) domainIdx;
-        mapping(bytes4 => AppAddressAndSelectorPosition) appAddressAndSelectorPosition;
+        mapping(bytes4 => PackagerAddressAndSelectorPosition) packAddressAndSelectorPosition;
         bytes4[] selectors;
-        mapping(address => bool) pausedApps;
+        mapping(address => bool) pausedPackagers;
         mapping(bytes4 => bool) pausedSelectors;
         address contractOwner;
         address superAdmin;
@@ -64,21 +68,6 @@ library LibDomain {
         domainStorage().accessControl[DEFAULT_ADMIN_ROLE][_newAdmin] = true;
         emit AdminshipTransferred(previousAdmin, _newAdmin);
     }
-
-    function getDomain(address _subDomainAddress) internal pure returns (IDomain) {
-        return IDomain(_subDomainAddress);
-    }
-
-    function deleteDomain(address _subDomainAddress) internal {
-        enforceIsContractOwnerAdmin();
-        delete domainStorage().domains[domainStorage().domainIdx[_subDomainAddress]];
-        delete domainStorage().domainStorage[_subDomainAddress];
-    }
-
-    function pauseDomain(address _subDomainAddress) internal {
-        enforceIsContractOwnerAdmin();
-        domainStorage().domainStorage[_subDomainAddress].paused = true;
-    }    
 
     function domainStorage() internal pure returns (DomainStorage storage ds) {
         bytes32 position = DOMAIN_STORAGE_POSITION;
@@ -112,128 +101,128 @@ library LibDomain {
     }   
 
     function enforceIsContractOwnerAdmin() internal view {
-        if(msg.sender != domainStorage().contractOwner && msg.sender != domainStorage().superAdmin) {
+        if(address(0) != domainStorage().contractOwner  && address(0) != domainStorage().superAdmin && msg.sender != domainStorage().contractOwner && msg.sender != domainStorage().superAdmin) {
             revert NotContractOwner(msg.sender, domainStorage().contractOwner);
         }        
     } 
 
     function enforceIsContractOwner() internal view {
-        if(msg.sender != domainStorage().contractOwner) {
+        if(address(0) != domainStorage().contractOwner  && address(0) != domainStorage().superAdmin &&msg.sender != domainStorage().contractOwner) {
             revert NotContractOwner(msg.sender, domainStorage().contractOwner);
         }        
     }     
 
-    event AppManagerExecuted(IAppManager.App[] _apps, address _init, bytes _calldata);
 
-    function appManager(
-        IAppManager.App[] memory _apps,
+
+    function packManager(
+        IPackagerManager.Packager[] memory _packs,
         address _init,
         bytes memory _calldata
     ) internal {
-        for (uint256 appIndex; appIndex < _apps.length; appIndex++) {
-            bytes4[] memory functionSelectors = _apps[appIndex].functionSelectors;
-            address AppAddress = _apps[appIndex].appAddress;
+        for (uint256 packIndex; packIndex < _packs.length; packIndex++) {
+            bytes4[] memory functionSelectors = _packs[packIndex].functionSelectors;
+            address PackagerAddress = _packs[packIndex].packAddress;
 
             if(functionSelectors.length == 0) {
-                revert NoSelectorsProvidedForApp(AppAddress);
+                revert NoSelectorsProvidedForPackager(PackagerAddress);
             }
 
-            IAppManager.AppManagerAction action = _apps[appIndex].action;
-            if (action == IDomain.AppManagerAction.Add) {
-                addFunctions(AppAddress, functionSelectors);
-            } else if (action == IDomain.AppManagerAction.Replace) {
-                replaceFunctions(AppAddress, functionSelectors);
-            } else if (action == IDomain.AppManagerAction.Remove) {
-                removeFunctions(AppAddress, functionSelectors);
+            IPackagerManager.PackagerManagerAction action = _packs[packIndex].action;
+            if (action == IPackagerManager.PackagerManagerAction.Add) {
+                addFunctions(PackagerAddress, functionSelectors);
+            } else if (action == IPackagerManager.PackagerManagerAction.Replace) {
+                replaceFunctions(PackagerAddress, functionSelectors);
+            } else if (action == IPackagerManager.PackagerManagerAction.Remove) {
+                removeFunctions(PackagerAddress, functionSelectors);
             } else {
-                revert IncorrectAppManagerAction(uint8(action));
+                revert IncorrectPackagerManagerAction(uint8(action));
             }
         }
 
-        emit AppManagerExecuted(_apps, _init, _calldata);
-        initializeAppManager(_init, _calldata);
+        emit PackagerManagerExecuted(_packs, _init, _calldata);
+        initializePackagerManager(_init, _calldata);
     }
 
-    function addFunctions(address _AppAddress, bytes4[] memory _functionSelectors) internal {  
-        if(_AppAddress == address(0)) {
+    function addFunctions(address _PackagerAddress, bytes4[] memory _functionSelectors) internal {  
+        if(_PackagerAddress == address(0)) {
             revert CannotAddSelectorsToZeroAddress(_functionSelectors);
         }
         DomainStorage storage ds = domainStorage();
         uint16 selectorCount = uint16(ds.selectors.length);                
-        enforceHasContractCode(_AppAddress, "LibAppManager: Add app has no code");
+        enforceHasContractCode(_PackagerAddress, "LibPackagerManager: Add pack has no code");
         for (uint256 selectorIndex; selectorIndex < _functionSelectors.length; selectorIndex++) {
             bytes4 selector = _functionSelectors[selectorIndex];
-            address oldAppAddress = ds.appAddressAndSelectorPosition[selector].appAddress;
-            if(oldAppAddress != address(0)) {
+            address oldPackagerAddress = ds.packAddressAndSelectorPosition[selector].packAddress;
+            if(oldPackagerAddress != address(0)) {
                 //revert CannotAddFunctionToDomainThatAlreadyExists(selector);
                 continue;
             }            
-            ds.appAddressAndSelectorPosition[selector] = AppAddressAndSelectorPosition(_AppAddress, selectorCount);
+            ds.packAddressAndSelectorPosition[selector] = PackagerAddressAndSelectorPosition(_PackagerAddress, selectorCount);
             ds.selectors.push(selector);
             selectorCount++;
         }
     }
 
-    function replaceFunctions(address _AppAddress, bytes4[] memory _functionSelectors) internal {       
+    function replaceFunctions(address _PackagerAddress, bytes4[] memory _functionSelectors) internal {       
         DomainStorage storage ds = domainStorage();
-        if(_AppAddress == address(0)) {
-            revert CannotReplaceFunctionsFromAppWithZeroAddress(_functionSelectors);
+        if(_PackagerAddress == address(0)) {
+            revert CannotReplaceFunctionsFromPackagerWithZeroAddress(_functionSelectors);
         }
-        enforceHasContractCode(_AppAddress, "LibAppManager: Replace app has no code");
+        enforceHasContractCode(_PackagerAddress, "LibPackagerManager: Replace pack has no code");
         for (uint256 selectorIndex; selectorIndex < _functionSelectors.length; selectorIndex++) {
             bytes4 selector = _functionSelectors[selectorIndex];
-            address oldAppAddress = ds.appAddressAndSelectorPosition[selector].appAddress;
+            address oldPackagerAddress = ds.packAddressAndSelectorPosition[selector].packAddress;
             // can't replace immutable functions -- functions defined directly in the domain in this case
-            if(oldAppAddress == address(this)) {
+            if(oldPackagerAddress == address(this)) {
                 revert CannotReplaceImmutableFunction(selector);
             }
-            if(oldAppAddress == _AppAddress) {
-                revert CannotReplaceFunctionWithTheSameFunctionFromTheSameApp(selector);
+            if(oldPackagerAddress == _PackagerAddress) {
+                revert CannotReplaceFunctionWithTheSameFunctionFromTheSamePackager(selector);
             }
-            if(oldAppAddress == address(0)) {
+            if(oldPackagerAddress == address(0)) {
                 revert CannotReplaceFunctionThatDoesNotExists(selector);
             }
-            // replace old app address
-            ds.appAddressAndSelectorPosition[selector].appAddress = _AppAddress;
+            // replace old pack address
+            ds.packAddressAndSelectorPosition[selector].packAddress = _PackagerAddress;
         }
     }
 
-    function removeFunctions(address _AppAddress, bytes4[] memory _functionSelectors) internal {        
+    function removeFunctions(address _PackagerAddress, bytes4[] memory _functionSelectors) internal {        
         DomainStorage storage ds = domainStorage();
         uint256 selectorCount = ds.selectors.length;
-        if(_AppAddress != address(0)) {
-            revert RemoveAppAddressMustBeZeroAddress(_AppAddress);
+        if(_PackagerAddress != address(0)) {
+            revert RemovePackagerAddressMustBeZeroAddress(_PackagerAddress);
         }        
         for (uint256 selectorIndex; selectorIndex < _functionSelectors.length; selectorIndex++) {
             bytes4 selector = _functionSelectors[selectorIndex];
-            AppAddressAndSelectorPosition memory oldAppAddressAndSelectorPosition = ds.appAddressAndSelectorPosition[selector];
-            if(oldAppAddressAndSelectorPosition.appAddress == address(0)) {
+            PackagerAddressAndSelectorPosition memory oldPackagerAddressAndSelectorPosition = ds.packAddressAndSelectorPosition[selector];
+            if(oldPackagerAddressAndSelectorPosition.packAddress == address(0)) {
                 revert CannotRemoveFunctionThatDoesNotExist(selector);
             }
             
             
             // can't remove immutable functions -- functions defined directly in the domain
-            if(oldAppAddressAndSelectorPosition.appAddress == address(this)) {
+            if(oldPackagerAddressAndSelectorPosition.packAddress == address(this)) {
                 revert CannotRemoveImmutableFunction(selector);
             }
             // replace selector with last selector
             selectorCount--;
-            if (oldAppAddressAndSelectorPosition.selectorPosition != selectorCount) {
+            if (oldPackagerAddressAndSelectorPosition.selectorPosition != selectorCount) {
                 bytes4 lastSelector = ds.selectors[selectorCount];
-                ds.selectors[oldAppAddressAndSelectorPosition.selectorPosition] = lastSelector;
-                ds.appAddressAndSelectorPosition[lastSelector].selectorPosition = oldAppAddressAndSelectorPosition.selectorPosition;
+                ds.selectors[oldPackagerAddressAndSelectorPosition.selectorPosition] = lastSelector;
+                ds.packAddressAndSelectorPosition[lastSelector].selectorPosition = oldPackagerAddressAndSelectorPosition.selectorPosition;
             }
             // delete last selector
             ds.selectors.pop();
-            delete ds.appAddressAndSelectorPosition[selector];
+            delete ds.packAddressAndSelectorPosition[selector];
         }
     }
 
-    function initializeAppManager(address _init, bytes memory _calldata) internal {
+    function initializePackagerManager(address _init, bytes memory _calldata) internal {
         if (_init == address(0)) {
             return;
         }
-        enforceHasContractCode(_init, "LibAppManager: _init address has no code");        
+        enforceHasContractCode(_init, "LibPackagerManager: _init address has no code");        
         (bool success, bytes memory error) = _init.delegatecall(_calldata);
         if (!success) {
             if (error.length > 0) {

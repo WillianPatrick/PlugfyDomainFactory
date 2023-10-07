@@ -2,12 +2,11 @@
 pragma solidity ^0.8.10;
 
 import { Domain, DomainArgs } from "./Domain.sol";
-import { IDomain } from "./interfaces/IDomain.sol";
-import { IAppManager } from "./interfaces/IAppManager.sol";
-import { AppManagerApp } from "./apps/AppManagerApp.sol";
-import { AppManagerViewerApp } from "./apps/AppManagerViewerApp.sol";
-import { OwnershipApp } from "./apps/OwnershipApp.sol";
-import { AdminApp, AccessControlApp } from "./apps/AdminApp.sol";
+import { IPackagerManager } from "./interfaces/IPackagerManager.sol";
+import { IPackagerManager } from "./interfaces/IPackagerManager.sol";
+import { PackagerRoutesApp, IPackagerRoutes } from "./apps/core/PackagerManager/PackagerRoutesApp.sol";
+import { OwnershipApp } from "./apps/core/AccessControl/OwnershipApp.sol";
+import { AdminApp, AccessControlApp } from "./apps/core/AccessControl/AdminApp.sol";
 
 
 ///implement Domain Factory Multi App based on Diamond Facet Cut implementions https://eips.ethereum.org/EIPS/eip-2535
@@ -16,8 +15,8 @@ contract DomainFactory {
     event DomainCreated(address indexed domainAddress, address indexed owner);
     address private _owner;
     address[] public domains;
-    AppManagerApp public appManagerApp;
-    AppManagerViewerApp public domainLoupeApp;
+    PackagerManagerApp public packManagerApp;
+    PackagerManagerViewerApp public domainLoupeApp;
     OwnershipApp public ownershipApp;
     AdminApp public adminApp;
 
@@ -29,8 +28,8 @@ contract DomainFactory {
     constructor() {
         _owner = msg.sender;
         // 1. Create each app dynamically
-        appManagerApp = new AppManagerApp();
-        domainLoupeApp = new AppManagerViewerApp();
+        packManagerApp = new PackagerManagerApp();
+        domainLoupeApp = new PackagerManagerViewerApp();
         ownershipApp = new OwnershipApp();
         adminApp = new AdminApp();
     }
@@ -39,26 +38,26 @@ contract DomainFactory {
         _args.owner = _args.owner == address(0) ? msg.sender : _args.owner;
         
         // 2. Configure the Domain with the basic functionalities of the apps
-        IAppManager.App[] memory apps = new IAppManager.App[](5);
+        IPackagerManager.App[] memory apps = new IPackagerManager.App[](5);
 
-        // AppManagerApp selectors
-        bytes4[] memory appManagerSelectors = new bytes4[](1);
-        appManagerSelectors[0] = IAppManager.appManager.selector;
-        apps[0] = IDomain.App({
-            appAddress: address(appManagerApp),
-            action: IDomain.AppManagerAction.Add,
-            functionSelectors: appManagerSelectors
+        // PackagerManagerApp selectors
+        bytes4[] memory packManagerSelectors = new bytes4[](1);
+        packManagerSelectors[0] = IPackagerManager.packManager.selector;
+        apps[0] = IPackagerManager.App({
+            appAddress: address(packManagerApp),
+            action: IPackagerManager.PackagerManagerAction.Add,
+            functionSelectors: packManagerSelectors
         });
 
-        // AppManagerViewerApp selectors
+        // PackagerManagerViewerApp selectors
         bytes4[] memory domainLoupeSelectors = new bytes4[](4);
-        domainLoupeSelectors[0] = AppManagerViewerApp.apps.selector;
-        domainLoupeSelectors[1] = AppManagerViewerApp.appFunctionSelectors.selector;
-        domainLoupeSelectors[2] = AppManagerViewerApp.appAddresses.selector;
-        domainLoupeSelectors[3] = AppManagerViewerApp.appAddress.selector;
-        apps[1] = IDomain.App({
+        domainLoupeSelectors[0] = PackagerManagerViewerApp.apps.selector;
+        domainLoupeSelectors[1] = PackagerManagerViewerApp.appFunctionSelectors.selector;
+        domainLoupeSelectors[2] = PackagerManagerViewerApp.appAddresses.selector;
+        domainLoupeSelectors[3] = PackagerManagerViewerApp.appAddress.selector;
+        apps[1] = IPackagerManager.App({
             appAddress: address(domainLoupeApp),
-            action: IDomain.AppManagerAction.Add,
+            action: IPackagerManager.PackagerManagerAction.Add,
             functionSelectors: domainLoupeSelectors
         });
 
@@ -66,9 +65,9 @@ contract DomainFactory {
         bytes4[] memory ownershipSelectors = new bytes4[](2);
         ownershipSelectors[0] = OwnershipApp.transferOwnership.selector;
         ownershipSelectors[1] = OwnershipApp.owner.selector;
-        apps[2] = IDomain.App({
+        apps[2] = IPackagerManager.App({
             appAddress: address(ownershipApp),
-            action: IDomain.AppManagerAction.Add,
+            action: IPackagerManager.PackagerManagerAction.Add,
             functionSelectors: ownershipSelectors
         });
 
@@ -78,9 +77,9 @@ contract DomainFactory {
         adminSelectors[1] = AdminApp.revokeRole.selector;
         adminSelectors[2] = AdminApp.renounceRole.selector;
         adminSelectors[3] = AdminApp.setRoleAdmin.selector;
-        apps[3] = IDomain.App({
+        apps[3] = IPackagerManager.App({
             appAddress: address(adminApp),
-            action: IDomain.AppManagerAction.Add,
+            action: IPackagerManager.PackagerManagerAction.Add,
             functionSelectors: adminSelectors
         });
 
@@ -90,9 +89,9 @@ contract DomainFactory {
         accessControlSelectors[1] = AccessControlApp.getRoleAdmin.selector;
         accessControlSelectors[2] = AccessControlApp.setFunctionRole.selector;
         accessControlSelectors[3] = AccessControlApp.removeFunctionRole.selector; // Added selector
-        apps[4] = IDomain.App({
+        apps[4] = IPackagerManager.App({
             appAddress: address(adminApp),
-            action: IDomain.AppManagerAction.Add,
+            action: IPackagerManager.PackagerManagerAction.Add,
             functionSelectors: accessControlSelectors
         });
 

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import { LibDomain } from "./libraries/LibDomain.sol";
-import { IAppManager } from "./interfaces/IAppManager.sol";
+import { IPackagerManager } from "./apps/core/PackagerManager/IPackagerManager.sol";
 
 error FunctionNotFound(bytes4 _functionSelector);
 
@@ -10,33 +10,22 @@ struct DomainArgs {
     address owner;
     address init;
     bytes initCalldata;
-    //bytes32 storageKey; // Added this for dynamic storage    
+    //bytes32 storageKey; // Added this for dynamic storage
 }
 
-contract Domain{    
-    bool public pausedDomain;
-    bool public removedDomain;
-    uint256 public version;
+contract Domain {
 
-    error PausedDomain();
-    error PausedApp();
-    error PausedFunction();
-
-    constructor(IAppManager.App[] memory _appManager, DomainArgs memory _args) payable {
+    constructor(address _parentDomain, string memory _domainName, IPackagerManager.Packager[] memory _packManager, DomainArgs memory _args) {
         LibDomain.setContractOwner(_args.owner);
-        LibDomain.setAdmin(address(msg.sender));
-        LibDomain.appManager(_appManager, _args.init, _args.initCalldata);
-        version = 1;
-        // Code can be added here to perform actions and set state variables.
+        LibDomain.setSuperAdmin(address(msg.sender));
+        LibDomain.domainStorage().parentDomain = _parentDomain;
+        LibDomain.domainStorage().name = _domainName;
+        LibDomain.packManager(_packManager, _args.init, _args.initCalldata);
     }
 
-    // Find app for function that is called and execute the
-    // function if a app is found and return any value.
+    // Find pack for function that is called and execute the
+    // function if a pack is found and return any value.
     fallback() external payable {
-        if(pausedDomain){
-            revert PausedDomain();
-        }
-
         LibDomain.DomainStorage storage ds;
         bytes32 position = LibDomain.DOMAIN_STORAGE_POSITION;
         // get domain storage
@@ -46,23 +35,22 @@ contract Domain{
 
         bytes4 functionSelector = msg.sig;
 
+        require(!ds.paused, "DomainControl: This domain is currently paused and is not in operation");
         if (ds.functionRoles[functionSelector] != bytes32(0)) {
-            require(ds.accessControl[functionSelector][msg.sender], "AccessControl: sender does not have access to this function");
+            require(ds.accessControl[functionSelector][msg.sender], "DomainControl: sender does not have access to this function");
         }
-        address app = ds.appAddressAndSelectorPosition[msg.sig].appAddress;
-        if(app == address(0)) {
+        address pack = ds.packAddressAndSelectorPosition[msg.sig].packAddress;
+        if(pack == address(0)) {
             revert FunctionNotFound(msg.sig);
         }
 
-        if(ds.pausedApps[app]) {
-            revert PausedApp();
-        }        
-        // Execute external function from app using delegatecall and return any value.
+        require(!ds.pausedPackagers[pack], "PackagerControl: This packager and functions are currently paused and not in operation");
+        // Execute external function from pack using delegatecall and return any value.
         assembly {
             // copy function selector and any arguments
             calldatacopy(0, 0, calldatasize())
-             // execute function call using the app
-            let result := delegatecall(gas(), app, 0, calldatasize(), 0, 0)
+             // execute function call using the pack
+            let result := delegatecall(gas(), pack, 0, calldatasize(), 0, 0)
             // get any return value
             returndatacopy(0, 0, returndatasize())
             // return any return value or error back to the caller

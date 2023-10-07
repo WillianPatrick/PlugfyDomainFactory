@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.10;
 
-import "../libraries/LibDomain.sol";
+import "../../../libraries/LibDomain.sol";
 import "./AccessControlApp.sol";
 
 contract AdminApp is AccessControlApp {

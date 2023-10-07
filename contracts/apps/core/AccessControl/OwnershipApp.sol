@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import { LibDomain } from "../libraries/LibDomain.sol";
+import { LibDomain } from "../../../libraries/LibDomain.sol";
 
 contract OwnershipApp {
     function transferOwnership(address _newOwner) external {
-        LibDomain.enforceIsContractOwner();
+        LibDomain.enforceIsContractOwnerAdmin();
         LibDomain.setContractOwner(_newOwner);
     }
 

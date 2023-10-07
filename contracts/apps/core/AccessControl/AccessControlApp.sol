@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.10;
 
-import "../libraries/LibDomain.sol";
+import "../../../libraries/LibDomain.sol";
 
 contract AccessControlApp {
 
@@ -9,6 +9,11 @@ contract AccessControlApp {
         require(hasRole(role, msg.sender), "AccessControl: sender does not have required role");
         _;
     }
+
+   modifier onlyRoleName(string memory role) {
+        require(hasRole(keccak256(abi.encodePacked(role)), msg.sender), "AccessControl: sender does not have required role");
+        _;
+    }    
 
     function hasRole(bytes32 role, address account) public view returns (bool) {
         LibDomain.DomainStorage storage ds = LibDomain.domainStorage();
