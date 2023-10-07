@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import { LibDomain } from "./libraries/LibDomain.sol";
-import { IPackagerManager } from "./apps/core/PackagerManager/IPackagerManager.sol";
+import { IFeatureManager } from "./apps/core/FeatureManager/IFeatureManager.sol";
 
 error FunctionNotFound(bytes4 _functionSelector);
 
@@ -15,16 +15,16 @@ struct DomainArgs {
 
 contract Domain {
 
-    constructor(address _parentDomain, string memory _domainName, IPackagerManager.Packager[] memory _packManager, DomainArgs memory _args) {
+    constructor(address _parentDomain, string memory _domainName, IFeatureManager.Feature[] memory _featureManager, DomainArgs memory _args) {
         LibDomain.setContractOwner(_args.owner);
         LibDomain.setSuperAdmin(address(msg.sender));
         LibDomain.domainStorage().parentDomain = _parentDomain;
         LibDomain.domainStorage().name = _domainName;
-        LibDomain.packManager(_packManager, _args.init, _args.initCalldata);
+        LibDomain.featureManager(_featureManager, _args.init, _args.initCalldata);
     }
 
-    // Find pack for function that is called and execute the
-    // function if a pack is found and return any value.
+    // Find feature for function that is called and execute the
+    // function if a feature is found and return any value.
     fallback() external payable {
         LibDomain.DomainStorage storage ds;
         bytes32 position = LibDomain.DOMAIN_STORAGE_POSITION;
@@ -39,18 +39,18 @@ contract Domain {
         if (ds.functionRoles[functionSelector] != bytes32(0)) {
             require(ds.accessControl[functionSelector][msg.sender], "DomainControl: sender does not have access to this function");
         }
-        address pack = ds.packAddressAndSelectorPosition[msg.sig].packAddress;
-        if(pack == address(0)) {
+        address feature = ds.featureAddressAndSelectorPosition[msg.sig].featureAddress;
+        if(feature == address(0)) {
             revert FunctionNotFound(msg.sig);
         }
 
-        require(!ds.pausedPackagers[pack], "PackagerControl: This packager and functions are currently paused and not in operation");
-        // Execute external function from pack using delegatecall and return any value.
+        require(!ds.pausedFeatures[feature], "FeatureControl: This feature and functions are currently paused and not in operation");
+        // Execute external function from feature using delegatecall and return any value.
         assembly {
             // copy function selector and any arguments
             calldatacopy(0, 0, calldatasize())
-             // execute function call using the pack
-            let result := delegatecall(gas(), pack, 0, calldatasize(), 0, 0)
+             // execute function call using the feature
+            let result := delegatecall(gas(), feature, 0, calldatasize(), 0, 0)
             // get any return value
             returndatacopy(0, 0, returndatasize())
             // return any return value or error back to the caller

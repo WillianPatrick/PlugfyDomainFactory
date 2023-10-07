@@ -4,17 +4,17 @@ pragma solidity ^0.8.10;
 import { LibDomain } from "../../../libraries/LibDomain.sol";
 
 
-library LibPackagerStore {
-    bytes32 constant DOMAIN_STORAGE_POSITION = keccak256("packager.store.standard.storage");
+library LibFeatureStore {
+    bytes32 constant DOMAIN_STORAGE_POSITION = keccak256("feature.store.standard.storage");
 
     struct Storage {
-        address[] packagers;
-        - Private on roles
-        - Features
-        - Bundles (Features Kits or Apps)
+        address[] features;
+        // - Private on roles
+        // - Features
+        // - Bundles (Features Kits or Apps)
         
-        PackagerManagerApp packagerManagerInstance;
-        PackagerRoutesApp packagerRoutesInstance;
+        FeatureManagerApp FeatureManagerInstance;
+        FeatureRoutesApp featureRoutesInstance;
         AdminApp adminInstance;
         OwnershipApp ownershipInstance;
     }
@@ -27,19 +27,19 @@ library LibPackagerStore {
     }
 }
 
-contract PackagerStoreAppInit {    
+contract FeatureStoreAppInit {    
 
     function init(address owner) external {
-        LibPackagerStore.Storage storage ds = LibPackagerStore.domainStorage();
+        LibFeatureStore.Storage storage ds = LibFeatureStore.domainStorage();
         ds.owner = msg.sender;
         // 1. Create each app dynamically
-        ds.packagerManagerInstance = new PackagerManagerApp();
-        ds.packagerRoutesInstance = new PackagerRoutesApp();
+        ds.FeatureManagerInstance = new FeatureManagerApp();
+        ds.featureRoutesInstance = new FeatureRoutesApp();
         ds.adminInstance = new OwnershipApp();
         ds.adminApp = new AdminApp();        
     }
 }
 ///implement Domain Factory Multi App based on Diamond Facet Cut implementions https://eips.ethereum.org/EIPS/eip-2535
-contract PackagerStoreApp is IPackagerStore, AdminApp {
+contract FeatureStoreApp is IFeatureStore, AdminApp {
 
 }

@@ -2,22 +2,22 @@
 pragma solidity ^0.8.0;
 
 import { Domain } from "../Domain.sol";
-import { IPackagerManager } from "../apps/core/PackagerManager/IPackagerManager.sol";
+import { IFeatureManager } from "../apps/core/FeatureManager/IFeatureManager.sol";
 
-import { IPackagerRoutes } from "../apps/core/PackagerManager/IPackagerRoutes.sol";
+import { IFeatureRoutes } from "../apps/core/FeatureManager/IFeatureRoutes.sol";
 
 error NoSelectorsGivenToAdd();
 error NotContractOwner(address _user, address _contractOwner);
-error NoSelectorsProvidedForPackager(address _packAddress);
+error NoSelectorsProvidedForFeature(address _featureAddress);
 error CannotAddSelectorsToZeroAddress(bytes4[] _selectors);
 error NoBytecodeAtAddress(address _contractAddress, string _message);
-error IncorrectPackagerManagerAction(uint8 _action);
-error CannotAddFunctionToPackagerThatAlreadyExists(bytes4 _selector);
-error CannotReplaceFunctionsFromPackagerWithZeroAddress(bytes4[] _selectors);
+error IncorrectFeatureManagerAction(uint8 _action);
+error CannotAddFunctionToFeatureThatAlreadyExists(bytes4 _selector);
+error CannotReplaceFunctionsFromFeatureWithZeroAddress(bytes4[] _selectors);
 error CannotReplaceImmutableFunction(bytes4 _selector);
-error CannotReplaceFunctionWithTheSameFunctionFromTheSamePackager(bytes4 _selector);
+error CannotReplaceFunctionWithTheSameFunctionFromTheSameFeature(bytes4 _selector);
 error CannotReplaceFunctionThatDoesNotExists(bytes4 _selector);
-error RemovePackagerAddressMustBeZeroAddress(address _packAddress);
+error RemoveFeatureAddressMustBeZeroAddress(address _featureAddress);
 error CannotRemoveFunctionThatDoesNotExist(bytes4 _selector);
 error CannotRemoveImmutableFunction(bytes4 _selector);
 error InitializationFunctionReverted(address _initializationContractAddress, bytes _calldata);
@@ -29,10 +29,10 @@ library LibDomain {
 
     event OwnershipTransferred(address previousOwner, address _newOwner);
     event AdminshipTransferred(address indexed previousAdmin, address indexed newAdmin);
-    event PackagerManagerExecuted(IPackagerManager.Packager[] _packs, address _init, bytes _calldata);
+    event FeatureManagerExecuted(IFeatureManager.Feature[] _features, address _init, bytes _calldata);
 
-    struct PackagerAddressAndSelectorPosition {
-        address packAddress;
+    struct FeatureAddressAndSelectorPosition {
+        address featureAddress;
         uint16 selectorPosition;
     }
 
@@ -41,9 +41,9 @@ library LibDomain {
         string name;
         address[] domains;
         mapping(address => uint256) domainIdx;
-        mapping(bytes4 => PackagerAddressAndSelectorPosition) packAddressAndSelectorPosition;
+        mapping(bytes4 => FeatureAddressAndSelectorPosition) featureAddressAndSelectorPosition;
         bytes4[] selectors;
-        mapping(address => bool) pausedPackagers;
+        mapping(address => bool) pausedFeatures;
         mapping(bytes4 => bool) pausedSelectors;
         address contractOwner;
         address superAdmin;
@@ -114,115 +114,115 @@ library LibDomain {
 
 
 
-    function packManager(
-        IPackagerManager.Packager[] memory _packs,
+    function featureManager(
+        IFeatureManager.Feature[] memory _features,
         address _init,
         bytes memory _calldata
     ) internal {
-        for (uint256 packIndex; packIndex < _packs.length; packIndex++) {
-            bytes4[] memory functionSelectors = _packs[packIndex].functionSelectors;
-            address PackagerAddress = _packs[packIndex].packAddress;
+        for (uint256 featureIndex; featureIndex < _features.length; featureIndex++) {
+            bytes4[] memory functionSelectors = _features[featureIndex].functionSelectors;
+            address FeatureAddress = _features[featureIndex].featureAddress;
 
             if(functionSelectors.length == 0) {
-                revert NoSelectorsProvidedForPackager(PackagerAddress);
+                revert NoSelectorsProvidedForFeature(FeatureAddress);
             }
 
-            IPackagerManager.PackagerManagerAction action = _packs[packIndex].action;
-            if (action == IPackagerManager.PackagerManagerAction.Add) {
-                addFunctions(PackagerAddress, functionSelectors);
-            } else if (action == IPackagerManager.PackagerManagerAction.Replace) {
-                replaceFunctions(PackagerAddress, functionSelectors);
-            } else if (action == IPackagerManager.PackagerManagerAction.Remove) {
-                removeFunctions(PackagerAddress, functionSelectors);
+            IFeatureManager.FeatureManagerAction action = _features[featureIndex].action;
+            if (action == IFeatureManager.FeatureManagerAction.Add) {
+                addFunctions(FeatureAddress, functionSelectors);
+            } else if (action == IFeatureManager.FeatureManagerAction.Replace) {
+                replaceFunctions(FeatureAddress, functionSelectors);
+            } else if (action == IFeatureManager.FeatureManagerAction.Remove) {
+                removeFunctions(FeatureAddress, functionSelectors);
             } else {
-                revert IncorrectPackagerManagerAction(uint8(action));
+                revert IncorrectFeatureManagerAction(uint8(action));
             }
         }
 
-        emit PackagerManagerExecuted(_packs, _init, _calldata);
-        initializePackagerManager(_init, _calldata);
+        emit FeatureManagerExecuted(_features, _init, _calldata);
+        initializeFeatureManager(_init, _calldata);
     }
 
-    function addFunctions(address _PackagerAddress, bytes4[] memory _functionSelectors) internal {  
-        if(_PackagerAddress == address(0)) {
+    function addFunctions(address _FeatureAddress, bytes4[] memory _functionSelectors) internal {  
+        if(_FeatureAddress == address(0)) {
             revert CannotAddSelectorsToZeroAddress(_functionSelectors);
         }
         DomainStorage storage ds = domainStorage();
         uint16 selectorCount = uint16(ds.selectors.length);                
-        enforceHasContractCode(_PackagerAddress, "LibPackagerManager: Add pack has no code");
+        enforceHasContractCode(_FeatureAddress, "LibFeatureManager: Add feature has no code");
         for (uint256 selectorIndex; selectorIndex < _functionSelectors.length; selectorIndex++) {
             bytes4 selector = _functionSelectors[selectorIndex];
-            address oldPackagerAddress = ds.packAddressAndSelectorPosition[selector].packAddress;
-            if(oldPackagerAddress != address(0)) {
+            address oldFeatureAddress = ds.featureAddressAndSelectorPosition[selector].featureAddress;
+            if(oldFeatureAddress != address(0)) {
                 //revert CannotAddFunctionToDomainThatAlreadyExists(selector);
                 continue;
             }            
-            ds.packAddressAndSelectorPosition[selector] = PackagerAddressAndSelectorPosition(_PackagerAddress, selectorCount);
+            ds.featureAddressAndSelectorPosition[selector] = FeatureAddressAndSelectorPosition(_FeatureAddress, selectorCount);
             ds.selectors.push(selector);
             selectorCount++;
         }
     }
 
-    function replaceFunctions(address _PackagerAddress, bytes4[] memory _functionSelectors) internal {       
+    function replaceFunctions(address _FeatureAddress, bytes4[] memory _functionSelectors) internal {       
         DomainStorage storage ds = domainStorage();
-        if(_PackagerAddress == address(0)) {
-            revert CannotReplaceFunctionsFromPackagerWithZeroAddress(_functionSelectors);
+        if(_FeatureAddress == address(0)) {
+            revert CannotReplaceFunctionsFromFeatureWithZeroAddress(_functionSelectors);
         }
-        enforceHasContractCode(_PackagerAddress, "LibPackagerManager: Replace pack has no code");
+        enforceHasContractCode(_FeatureAddress, "LibFeatureManager: Replace feature has no code");
         for (uint256 selectorIndex; selectorIndex < _functionSelectors.length; selectorIndex++) {
             bytes4 selector = _functionSelectors[selectorIndex];
-            address oldPackagerAddress = ds.packAddressAndSelectorPosition[selector].packAddress;
+            address oldFeatureAddress = ds.featureAddressAndSelectorPosition[selector].featureAddress;
             // can't replace immutable functions -- functions defined directly in the domain in this case
-            if(oldPackagerAddress == address(this)) {
+            if(oldFeatureAddress == address(this)) {
                 revert CannotReplaceImmutableFunction(selector);
             }
-            if(oldPackagerAddress == _PackagerAddress) {
-                revert CannotReplaceFunctionWithTheSameFunctionFromTheSamePackager(selector);
+            if(oldFeatureAddress == _FeatureAddress) {
+                revert CannotReplaceFunctionWithTheSameFunctionFromTheSameFeature(selector);
             }
-            if(oldPackagerAddress == address(0)) {
+            if(oldFeatureAddress == address(0)) {
                 revert CannotReplaceFunctionThatDoesNotExists(selector);
             }
-            // replace old pack address
-            ds.packAddressAndSelectorPosition[selector].packAddress = _PackagerAddress;
+            // replace old feature address
+            ds.featureAddressAndSelectorPosition[selector].featureAddress = _FeatureAddress;
         }
     }
 
-    function removeFunctions(address _PackagerAddress, bytes4[] memory _functionSelectors) internal {        
+    function removeFunctions(address _FeatureAddress, bytes4[] memory _functionSelectors) internal {        
         DomainStorage storage ds = domainStorage();
         uint256 selectorCount = ds.selectors.length;
-        if(_PackagerAddress != address(0)) {
-            revert RemovePackagerAddressMustBeZeroAddress(_PackagerAddress);
+        if(_FeatureAddress != address(0)) {
+            revert RemoveFeatureAddressMustBeZeroAddress(_FeatureAddress);
         }        
         for (uint256 selectorIndex; selectorIndex < _functionSelectors.length; selectorIndex++) {
             bytes4 selector = _functionSelectors[selectorIndex];
-            PackagerAddressAndSelectorPosition memory oldPackagerAddressAndSelectorPosition = ds.packAddressAndSelectorPosition[selector];
-            if(oldPackagerAddressAndSelectorPosition.packAddress == address(0)) {
+            FeatureAddressAndSelectorPosition memory oldFeatureAddressAndSelectorPosition = ds.featureAddressAndSelectorPosition[selector];
+            if(oldFeatureAddressAndSelectorPosition.featureAddress == address(0)) {
                 revert CannotRemoveFunctionThatDoesNotExist(selector);
             }
             
             
             // can't remove immutable functions -- functions defined directly in the domain
-            if(oldPackagerAddressAndSelectorPosition.packAddress == address(this)) {
+            if(oldFeatureAddressAndSelectorPosition.featureAddress == address(this)) {
                 revert CannotRemoveImmutableFunction(selector);
             }
             // replace selector with last selector
             selectorCount--;
-            if (oldPackagerAddressAndSelectorPosition.selectorPosition != selectorCount) {
+            if (oldFeatureAddressAndSelectorPosition.selectorPosition != selectorCount) {
                 bytes4 lastSelector = ds.selectors[selectorCount];
-                ds.selectors[oldPackagerAddressAndSelectorPosition.selectorPosition] = lastSelector;
-                ds.packAddressAndSelectorPosition[lastSelector].selectorPosition = oldPackagerAddressAndSelectorPosition.selectorPosition;
+                ds.selectors[oldFeatureAddressAndSelectorPosition.selectorPosition] = lastSelector;
+                ds.featureAddressAndSelectorPosition[lastSelector].selectorPosition = oldFeatureAddressAndSelectorPosition.selectorPosition;
             }
             // delete last selector
             ds.selectors.pop();
-            delete ds.packAddressAndSelectorPosition[selector];
+            delete ds.featureAddressAndSelectorPosition[selector];
         }
     }
 
-    function initializePackagerManager(address _init, bytes memory _calldata) internal {
+    function initializeFeatureManager(address _init, bytes memory _calldata) internal {
         if (_init == address(0)) {
             return;
         }
-        enforceHasContractCode(_init, "LibPackagerManager: _init address has no code");        
+        enforceHasContractCode(_init, "LibFeatureManager: _init address has no code");        
         (bool success, bytes memory error) = _init.delegatecall(_calldata);
         if (!success) {
             if (error.length > 0) {

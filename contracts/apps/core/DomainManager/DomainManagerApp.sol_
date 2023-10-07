@@ -6,8 +6,8 @@ import { Domain, DomainArgs } from "../../../Domain.sol";
 import { IDomainManager } from "./IDomainManager.sol";
 import { AdminApp } from "../AccessControl/AdminApp.sol";
 import { OwnershipApp } from "../AccessControl/OwnershipApp.sol";
-import { PackagerManagerApp } from "../PackagerManager/PackagerManagerApp.sol";
-import { PackagerRoutesApp } from "../PackagerManager/PackagerRoutesApp.sol";
+import { FeatureManagerApp } from "../FeatureManager/FeatureManagerApp.sol";
+import { FeatureRoutesApp } from "../FeatureManager/FeatureRoutesApp.sol";
 
 
 library LibDomainManager {
@@ -18,8 +18,8 @@ library LibDomainManager {
         address owner;
         address[] domains;
         
-        PackagerManagerApp packagerManagerInstance;
-        PackagerRoutesApp packagerRoutesInstance;
+        FeatureManagerApp featureManagerInstance;
+        FeatureRoutesApp featureRoutesInstance;
         AdminApp adminInstance;
         OwnershipApp ownershipInstance;
     }
@@ -38,8 +38,8 @@ contract DomainManagerAppInit {
         LibDomainManager.Storage storage ds = LibDomainManager.domainStorage();
         ds.owner = msg.sender;
         // 1. Create each app dynamically
-        ds.packagerManagerInstance = new PackagerManagerApp();
-        ds.packagerRoutesInstance = new PackagerRoutesApp();
+        ds.featureManagerInstance = new FeatureManagerApp();
+        ds.featureRoutesInstance = new FeatureRoutesApp();
         ds.adminInstance = new OwnershipApp();
         ds.adminApp = new AdminApp();        
     }
@@ -60,26 +60,26 @@ contract DomainManagerApp is IDomainManager, AdminApp {
         _args.owner = _args.owner == address(0) ? msg.sender : _args.owner;
         
         // 2. Configure the Domain with the basic functionalities of the apps
-        PackagerManagerApp.Packager[] memory apps = new PackagerManagerApp.Packager[](5);
+        FeatureManagerApp.Feature[] memory apps = new FeatureManagerApp.Feature[](5);
 
-        // PackagerManagerApp selectors
-        bytes4[] memory packManagerSelectors = new bytes4[](1);
-        packManagerSelectors[0] = PackagerManagerApp.packagerManager.selector;
-        apps[0] = PackagerManagerApp.Packager({
-            appAddress: address(ds.packagerManagerInstance),
-            action: PackagerManagerApp.PackagerManagerAction.Add,
-            functionSelectors: packManagerSelectors
+        // FeatureManagerApp selectors
+        bytes4[] memory featureManagerSelectors = new bytes4[](1);
+        featureManagerSelectors[0] = FeatureManagerApp.FeatureManager.selector;
+        apps[0] = FeatureManagerApp.Feature({
+            appAddress: address(ds.featureManagerInstance),
+            action: FeatureManagerApp.FeatureManagerAction.Add,
+            functionSelectors: featureManagerSelectors
         });
 
-        // PackagerManagerViewerApp selectors
+        // FeatureManagerViewerApp selectors
         bytes4[] memory domainLoupeSelectors = new bytes4[](4);
-        domainLoupeSelectors[0] = PackagerManagerViewerApp.apps.selector;
-        domainLoupeSelectors[1] = PackagerManagerViewerApp.appFunctionSelectors.selector;
-        domainLoupeSelectors[2] = PackagerManagerViewerApp.appAddresses.selector;
-        domainLoupeSelectors[3] = PackagerManagerViewerApp.appAddress.selector;
-        apps[1] = IPackagerManager.App({
+        domainLoupeSelectors[0] = FeatureManagerViewerApp.apps.selector;
+        domainLoupeSelectors[1] = FeatureManagerViewerApp.appFunctionSelectors.selector;
+        domainLoupeSelectors[2] = FeatureManagerViewerApp.appAddresses.selector;
+        domainLoupeSelectors[3] = FeatureManagerViewerApp.appAddress.selector;
+        apps[1] = IFeatureManager.App({
             appAddress: address(domainLoupeApp),
-            action: IPackagerManager.PackagerManagerAction.Add,
+            action: IFeatureManager.FeatureManagerAction.Add,
             functionSelectors: domainLoupeSelectors
         });
 
@@ -87,9 +87,9 @@ contract DomainManagerApp is IDomainManager, AdminApp {
         bytes4[] memory ownershipSelectors = new bytes4[](2);
         ownershipSelectors[0] = OwnershipApp.transferOwnership.selector;
         ownershipSelectors[1] = OwnershipApp.owner.selector;
-        apps[2] = IPackagerManager.App({
+        apps[2] = IFeatureManager.App({
             appAddress: address(ownershipApp),
-            action: IPackagerManager.PackagerManagerAction.Add,
+            action: IFeatureManager.FeatureManagerAction.Add,
             functionSelectors: ownershipSelectors
         });
 
@@ -99,9 +99,9 @@ contract DomainManagerApp is IDomainManager, AdminApp {
         adminSelectors[1] = AdminApp.revokeRole.selector;
         adminSelectors[2] = AdminApp.renounceRole.selector;
         adminSelectors[3] = AdminApp.setRoleAdmin.selector;
-        apps[3] = IPackagerManager.App({
+        apps[3] = IFeatureManager.App({
             appAddress: address(adminApp),
-            action: IPackagerManager.PackagerManagerAction.Add,
+            action: IFeatureManager.FeatureManagerAction.Add,
             functionSelectors: adminSelectors
         });
 
@@ -111,9 +111,9 @@ contract DomainManagerApp is IDomainManager, AdminApp {
         accessControlSelectors[1] = AccessControlApp.getRoleAdmin.selector;
         accessControlSelectors[2] = AccessControlApp.setFunctionRole.selector;
         accessControlSelectors[3] = AccessControlApp.removeFunctionRole.selector; // Added selector
-        apps[4] = IPackagerManager.App({
+        apps[4] = IFeatureManager.App({
             appAddress: address(adminApp),
-            action: IPackagerManager.PackagerManagerAction.Add,
+            action: IFeatureManager.FeatureManagerAction.Add,
             functionSelectors: accessControlSelectors
         });
 
