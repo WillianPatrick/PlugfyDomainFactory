@@ -1,0 +1,75 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import { LibBalances } from "../../libraries/ERC20/LibBalances.sol";
+import { LibAllowances } from "../../libraries/ERC20/LibAllowances.sol";
+
+library LibAllowances {
+    bytes32 constant DOMAIN_STORAGE_POSITION = keccak256("token.allowances");
+
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+
+    struct AllowancesStates {
+        mapping(address => mapping(address => uint256)) allowances;
+    }
+
+    function domainStorage() internal pure returns (AllowancesStates storage ds) {
+        bytes32 position = DOMAIN_STORAGE_POSITION;
+        assembly {
+            ds.slot := position
+        } 
+    }
+
+    function approve(
+        address _owner,
+        address _spender,
+        uint256 _amount
+    ) internal {
+        AllowancesStates storage ds = domainStorage();
+        require(_owner != address(0), "approve from the zero address");
+        require(_spender != address(0), "approve to the zero address");
+
+        ds.allowances[_owner][_spender] = _amount;
+        emit Approval(_owner, _spender, _amount);
+    }
+
+    function spendAllowance(
+        address _owner,
+        address _spender,
+        uint256 _amount
+    ) internal {
+        AllowancesStates storage ds = domainStorage();
+        uint256 currentAllowance = ds.allowances[_owner][_spender];
+        if (currentAllowance != type(uint256).max) {
+            require(currentAllowance >= _amount, "insufficient allowance");
+            unchecked {
+                approve(_owner, _spender, currentAllowance - _amount);
+            }
+        }
+    }
+}
+
+contract AllowancesApp {
+
+    function allowance(address _owner, address _spender) external view returns (uint256) {
+        LibAllowances.AllowancesStates storage ds = LibAllowances.domainStorage();
+        return ds.allowances[_owner][_spender];
+    }
+
+    function approve(address _spender, uint256 _amount) external returns (bool) {
+        address owner = msg.sender;
+        LibAllowances.approve(owner, _spender, _amount);
+        return true;
+    }
+
+    function transferFrom(
+        address _from,
+        address _to,
+        uint256 _amount
+    ) external returns (bool) {
+        address spender = msg.sender;
+        LibAllowances.spendAllowance(_from, spender, _amount);
+        LibBalances.transfer(_from, _to, _amount);
+        return true;
+    }
+}

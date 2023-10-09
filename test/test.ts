@@ -1,22 +1,19 @@
-import { expect } from "chai";
-import { ethers } from "hardhat";
-import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
-import * as mocha from "mocha-steps";
-import { parseEther } from '@ethersproject/units';
-import { FeatureManagerApp, FeatureRoutesApp, OwnershipApp, AdminApp } from '../typechain-types'; //ERC20ConstantsFeature, ERC20Feature, BalancesFeature,AllowancesFeature, SupplyRegulatorFeature,
-import { assert } from 'chai';
-import { getSelectors, getFunctionSignature } from "../scripts/libraries/domain";
+const { expect } = require("chai");
+const { ethers } = require("hardhat");
+const assert = require('assert');
+const mocha = require("mocha-steps");
+const { parseEther } = require('@ethersproject/units');
+const { FeatureManagerApp, FeatureRoutesApp, OwnershipApp, AdminApp, FeatureStoreApp, DomainManagerApp } = require('../typechain-types');
+const { getSelectors } = require("../scripts/libraries/domain");
 
 describe("Domain Global Test", async () => {
+    let featureStore: FeatureStoreApp;
+    let featureStoreBase: FeatureStoreApp;
     let featureManagerFeature: FeatureManagerApp;
     let featureRouterFeature: FeatureRoutesApp;
     let ownershipFeature: OwnershipApp;
-    // let constantsFeature: ERC20ConstantsFeature;
-    // let erc20Feature: ERC20Feature;
-    // let balancesFeature: BalancesFeature;
-    // let allowancesFeature: AllowancesFeature;
-    // let supplyRegulatorFeature: SupplyRegulatorFeature;
     let adminFeature: AdminApp;
+    let domainManagerFeature: DomainManagerApp;
 
     interface Feature {
         featureAddress: string,
@@ -33,113 +30,161 @@ describe("Domain Global Test", async () => {
     let owner: SignerWithAddress, admin: SignerWithAddress, 
     user1: SignerWithAddress, user2: SignerWithAddress, user3: SignerWithAddress;
 
-    let totalSupply = parseEther('2500000');
-    let transferAmount = parseEther('1000');
-    let name = "Token Name";
-    let symbol = "SYMBOL";
-    let decimals = 18;
-
-    beforeEach(async () => {
-        [owner, admin, user1, user2, user3] = await ethers.getSigners();
-    });
-
     enum FeatureAction {
         Add,
         Replace,
         Remove
     }
 
-    let calldataAfterDeploy: string;
     let addressDomain: string;
 
     let featureToAddressImplementation: FeatureToAddress = {};
-
-    let features: Feature[] = [];
-
     const FeatureNames = [
+        'FeatureStoreApp',
         'FeatureManagerApp',
         'FeatureRoutesApp',
-        'OwnershipApp'
+        'OwnershipApp',
+        'AdminApp',
+        'DomainManagerApp'
     ];
-    mocha.step("Deploy the mandatory features to service the Domain", async function() {
+
+    
+    let domain1;
+    let domain2;
+    let coreBundleId = ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(['string'], ['Core']));
+    let featuresBundle;
+
+    beforeEach(async () => {
+        [owner, admin, user1, user2, user3] = await ethers.getSigners();
+    });
+
+    mocha.step("Deploy the FeatureStore", async function() {
+        const FeatureStoreFactory = await ethers.getContractFactory('FeatureStoreApp');
+        featureStoreBase = await FeatureStoreFactory.deploy();
+        await featureStoreBase.deployed();
+    });
+
+    mocha.step("Create core bundle and add features to service FeaturesStore", async function() {
+        let featureIds = [];
+        
+        // Deploying and registering each core feature
         for (const FeatureName of FeatureNames) {
-            const Feature = await ethers.getContractFactory(FeatureName)
-            const feature = await Feature.deploy()
+            const Feature = await ethers.getContractFactory(FeatureName);
+            const feature = await Feature.deploy();
             await feature.deployed();
-            features.push({
-              featureAddress: feature.address,
-              action: FeatureAction.Add,
-              functionSelectors: getSelectors(feature)
-            });
+    
+            // Create a feature structure for the deployed feature
+            const featureStruct = {
+                id: ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(['string'], [FeatureName])),
+                featureAddress: feature.address,
+                functionSelectors: getSelectors(feature),
+                name: FeatureName,
+                version: 1,
+                updateDateTime: Date.now(),
+                author: owner.address,
+                owner: owner.address,
+                disabled: false,
+                dependencies: [],
+                layer: 0,
+                chanel: 0
+            };
+    
+            // Register the deployed feature in the FeatureStore
+            await featureStoreBase.addFeature(featureStruct);
             featureToAddressImplementation[FeatureName] = feature.address;
+    
+            featureIds.push(featureStruct.id);
         };
+    
+        // Creating the Core bundle
+        const coreBundle = {
+            id: ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(['string'], ['Core'])),
+            functions: [], // Assuming you will add function IDs here if necessary
+            features: featureIds,
+            bundles: [], // Assuming you will add other bundle IDs here if necessary
+            name: "Core",
+            version: 1,
+            updateDateTime: Date.now(),
+            author: owner.address,
+            owner: owner.address,
+            disabled: false,
+            layer: 0,
+            chanel: 0
+        };
+    
+       
+        // Registering the Core bundle in the FeatureStore
+        await featureStoreBase.addBundle(coreBundle);
     });
     
-    mocha.step("Deploy the Domain contract", async function () {
+    mocha.step("Deploy the Domain contract", async function() {
+        const coreBundleId = ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(['string'], ['Core']));
+        const features = await featureStoreBase.getFeaturesByBundle(coreBundleId);
+        
         const domainArgs = {
             owner: owner.address,
             init: ethers.constants.AddressZero,
             initCalldata: '0x00'
         };
-        const Domain = await ethers.getContractFactory('Domain')
-        const domain = await Domain.deploy(ethers.constants.AddressZero,"Main Domain", features, domainArgs)
+
+        const Domain = await ethers.getContractFactory('Domain');
+        const domain = await Domain.deploy(ethers.constants.AddressZero, "Main Domain", features, domainArgs);
         await domain.deployed();
         addressDomain = domain.address;
     });
+    
 
     mocha.step("Initialization of service contracts", async function () {
+        featureStore = await ethers.getContractAt('FeatureStoreApp', addressDomain);
         featureManagerFeature = await ethers.getContractAt('FeatureManagerApp', addressDomain);
         featureRouterFeature = await ethers.getContractAt('FeatureRoutesApp', addressDomain);
         ownershipFeature = await ethers.getContractAt('OwnershipApp', addressDomain);
+        adminFeature = await ethers.getContractAt('AdminApp', addressDomain);
+        domainManagerFeature = await ethers.getContractAt('DomainManagerApp', addressDomain);
     });
-
     mocha.step("Ensuring that the feature addresses on the contract match those obtained during the implementation deployment", async function () {
         const addresses = [];
         for (const address of await featureRouterFeature.featureAddresses()) {
-            addresses.push(address)
+            addresses.push(address);
         }
-        assert.sameMembers(Object.values(featureToAddressImplementation), addresses)
+        expect(Object.values(featureToAddressImplementation)).to.have.members(addresses);
     });
 
     mocha.step("Get function selectors by their feature addresses", async function () {
-        let selectors = getSelectors(featureManagerFeature)
-        let result = await featureRouterFeature.featureFunctionSelectors(featureToAddressImplementation['FeatureManagerApp'])
+        let selectors = getSelectors(featureManagerFeature);
+        let result = await featureRouterFeature.featureFunctionSelectors(featureToAddressImplementation['FeatureManagerApp']);
        
-        assert.sameMembers(result, selectors)
-        selectors = getSelectors(featureRouterFeature)
-        result = await featureRouterFeature.featureFunctionSelectors(featureToAddressImplementation['FeatureRoutesApp'])
+        expect(result).to.have.members(selectors);
+        selectors = getSelectors(featureRouterFeature);
+        result = await featureRouterFeature.featureFunctionSelectors(featureToAddressImplementation['FeatureRoutesApp']);
 
-        assert.sameMembers(result, selectors)
-        selectors = getSelectors(ownershipFeature)
-        result = await featureRouterFeature.featureFunctionSelectors(featureToAddressImplementation['OwnershipApp'])
+        expect(result).to.have.members(selectors);
+        selectors = getSelectors(ownershipFeature);
+        result = await featureRouterFeature.featureFunctionSelectors(featureToAddressImplementation['OwnershipApp']);
 
-        assert.sameMembers(result, selectors)
+        expect(result).to.have.members(selectors);
     });
 
     mocha.step("Get feature addresses by selectors related to these features", async function () {
-        assert.equal(
-            featureToAddressImplementation['FeatureManagerApp'],
+        expect(featureToAddressImplementation['FeatureManagerApp']).to.equal(
             await featureRouterFeature.featureAddress("0x928b1d82") //featureManager(Feature[] calldata _featureManager, address _init, bytes calldata _calldata)
-        )
-        assert.equal(
-            featureToAddressImplementation['FeatureRoutesApp'],
+        );
+        expect(featureToAddressImplementation['FeatureRoutesApp']).to.equal(
             await featureRouterFeature.featureAddress("0x7f27b0d6") // features()
-        )
-        assert.equal(
-            featureToAddressImplementation['FeatureRoutesApp'],
+        );
+        expect(featureToAddressImplementation['FeatureRoutesApp']).to.equal(
             await featureRouterFeature.featureAddress("0x52e8931d") // featureFunctionSelectors(address _feature)
-        )
-        assert.equal(
-            featureToAddressImplementation['OwnershipApp'],
+        );
+        expect(featureToAddressImplementation['OwnershipApp']).to.equal(
             await featureRouterFeature.featureAddress("0x8da5cb5b") // transferOwnership(address _newOwner)
-        )
+        );
     });
 
     mocha.step("Transfer the right to change implementations and back", async function () {
         await ownershipFeature.connect(owner).transferOwnership(admin.address);
-        assert.equal(await ownershipFeature.owner(), admin.address);
+        expect(await ownershipFeature.owner()).to.equal(admin.address);
         await ownershipFeature.connect(admin).transferOwnership(owner.address);
-        assert.equal(await ownershipFeature.owner(), owner.address);
+        expect(await ownershipFeature.owner()).to.equal(owner.address);
     });
 
     // ERC20:
@@ -271,32 +316,25 @@ describe("Domain Global Test", async () => {
     //     expect(await balancesFeature.totalSupply()).to.be.equal(totalSupply.add(mintAmount).sub(burnAmount));
     // });
 
-    mocha.step("Deploy the AdminApp contract", async function() {
-        const AdminAppFactory = await ethers.getContractFactory("AdminApp");
-        adminFeature = await AdminAppFactory.deploy();
-        await adminFeature.deployed();
-        featureToAddressImplementation['AdminApp'] = adminFeature.address;
-    });
     
-    mocha.step("Extract and Register AdminApp's public and external functions", async function() {
-        if (!adminFeature) throw new Error("AdminApp not initialized");
-        const featureForAdmin = [{
-            featureAddress: adminFeature.address,
-            action: FeatureAction.Add,
-            functionSelectors: getSelectors(adminFeature)
-        }];
+    // mocha.step("Extract and Register AdminApp's public and external functions", async function() {
+    //     if (!adminFeature) throw new Error("AdminApp not initialized");
+    //     const featureForAdmin = [{
+    //         featureAddress: adminFeature.address,
+    //         action: FeatureAction.Add,
+    //         functionSelectors: getSelectors(adminFeature)
+    //     }];
 
-        await featureManagerFeature.connect(owner).FeatureManager(featureForAdmin, ethers.constants.AddressZero, "0x00");
-    });
+    //     await featureManagerFeature.connect(owner).FeatureManager(featureForAdmin, ethers.constants.AddressZero, "0x00");
+    // });
 
-
-    mocha.step("Testing AdminApp's functionalities", async function() {
+    async function testAdminAppFunctions(domainAddress: string = addressDomain) {
         const DEFAULT_ADMIN_ROLE = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('DEFAULT_ADMIN_ROLE'));
         const dummyRole = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('DUMMY_ROLE'));
 
-        adminFeature = await ethers.getContractAt('AdminApp', addressDomain);
+        adminFeature = await ethers.getContractAt('AdminApp', domainAddress);
         // Grant the DEFAULT_ADMIN_ROLE to the owner
-        await adminFeature.connect(owner).grantRole(DEFAULT_ADMIN_ROLE, addressDomain);
+        await adminFeature.connect(owner).grantRole(DEFAULT_ADMIN_ROLE, domainAddress);
         await adminFeature.connect(owner).grantRole(DEFAULT_ADMIN_ROLE, owner.address);
 
         // Now, the owner can set the admin role for the dummyRole
@@ -324,8 +362,92 @@ describe("Domain Global Test", async () => {
         expect(await adminFeature.hasRole(DEFAULT_ADMIN_ROLE, user1.address)).to.be.false;   
         
         expect(await adminFeature.hasRole(dummyRole, user1.address)).to.be.false;        
+    }
+
+    mocha.step("Testing AdminApp's functionalities", async function(){ await testAdminAppFunctions(addressDomain); });
+
+    mocha.step("Create two distinct domains with Domain Manager Feature", async function() {
+        featuresBundle = await featureStoreBase.getFeaturesByBundle(coreBundleId);
+        const domain1Args = {
+            parentDomain: addressDomain,  // Assuming parent domain is addressDomain
+            domainName: "Domain1",
+            features: [],  // Assuming no features are added initially
+            args: {
+                owner: owner.address,
+                init: ethers.constants.AddressZero,
+                initCalldata: '0x00'
+            }
+        };
+        const domain2Args = {
+            parentDomain: addressDomain,
+            domainName: "Domain2",
+            features: [],
+            args: {
+                owner: owner.address,
+                init: ethers.constants.AddressZero,
+                initCalldata: '0x00'
+            }
+        };
+    
+        await domainManagerFeature.createDomain(domain1Args.parentDomain, domain1Args.domainName, featuresBundle, domain1Args.args);
+        await domainManagerFeature.createDomain(domain2Args.parentDomain, domain2Args.domainName, featuresBundle, domain2Args.args);
+
+        domain1 = await domainManagerFeature.getDomainAddress(0);
+        domain2 = await domainManagerFeature.getDomainAddress(1);
+        expect(domain1).to.exist;
+        expect(domain2).to.exist;
+        expect(domain1).to.not.equal(domain2);
+
+    });
+   
+    mocha.step("Testing AdminApp's functionalities for each domain", async function() {
+        await testAdminAppFunctions(domain1);
+        await testAdminAppFunctions(domain2);
     });
 
+    let subdomain1;
+    let subdomain2;
+    mocha.step("Create subdomains for each domain", async function() {
+        const domain1Args = {
+            parentDomain: domain1,  // Assuming parent domain is addressDomain
+            domainName: "Subdomain1",
+            features: [],  // Assuming no features are added initially
+            args: {
+                owner: owner.address,
+                init: ethers.constants.AddressZero,
+                initCalldata: '0x00'
+            }
+        };
+        const domain2Args = {
+            parentDomain: domain2,
+            domainName: "Subdomain2",
+            features: [],
+            args: {
+                owner: owner.address,
+                init: ethers.constants.AddressZero,
+                initCalldata: '0x00'
+            }
+        };
+
+        domainManagerFeature = await ethers.getContractAt('DomainManagerApp', domain1);
+        await domainManagerFeature.createDomain(domain1Args.parentDomain, domain1Args.domainName, featuresBundle, domain1Args.args);
+        subdomain1 = await domainManagerFeature.getDomainAddress(0);
+
+        domainManagerFeature = await ethers.getContractAt('DomainManagerApp', domain2);
+        await domainManagerFeature.createDomain(domain2Args.parentDomain, domain2Args.domainName, featuresBundle, domain2Args.args);
+        subdomain2 = await domainManagerFeature.getDomainAddress(0);
+    
+        expect(subdomain1).to.exist;
+        expect(subdomain2).to.exist;
+        expect(subdomain1).to.not.equal(subdomain2);
+    });
+    
+    mocha.step("Testing AdminApp's functionalities for each subdomain", async function() {
+        await testAdminAppFunctions(subdomain1);
+        await testAdminAppFunctions(subdomain2);
+    });
+
+    
     mocha.step("Removing the featureManager function for further immutability", async function () {
         const features = [{
             featureAddress: ethers.constants.AddressZero,

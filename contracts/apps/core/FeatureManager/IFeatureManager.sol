@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 interface IFeatureManager {
-    enum FeatureManagerAction {Add, Replace, Remove, Pause}
+    enum FeatureManagerAction {Add, Replace, Remove, Pause, Ignored}
 
     struct Feature {
         address featureAddress;
