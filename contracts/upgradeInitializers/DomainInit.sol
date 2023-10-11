@@ -8,9 +8,9 @@ import { LibDomain } from "../libraries/LibDomain.sol";
 
 contract DomainInit {    
 
-    function initERC20(string calldata _name, string calldata _symbol, uint8 _decimals, address _admin, uint256 _totalSupply) external {
+    //function initERC20(string calldata _name, string calldata _symbol, uint8 _decimals, address _admin, uint256 _totalSupply) external {
         //LibERC20Constants.ConstantsStates storage constantsStorage = LibERC20Constants.domainStorage();
-         LibDomain.DomainStorage storage ds = LibDomain.domainStorage();
+         //LibDomain.DomainStorage storage ds = LibDomain.domainStorage();
 
         // constantsStorage.name = _name;
         // constantsStorage.symbol = _symbol;
@@ -30,5 +30,5 @@ contract DomainInit {
         //        // Assign the initial supply to the admin
         // ds.balances[_admin] = _totalSupply;
         // ds.totalSupply = _totalSupply;
-    }
+    //}
 }

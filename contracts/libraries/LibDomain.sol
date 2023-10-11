@@ -20,7 +20,7 @@ error CannotReplaceFunctionThatDoesNotExists(bytes4 _selector);
 error RemoveFeatureAddressMustBeZeroAddress(address _featureAddress);
 error CannotRemoveFunctionThatDoesNotExist(bytes4 _selector);
 error CannotRemoveImmutableFunction(bytes4 _selector);
-error InitializationFunctionReverted(address _initializationContractAddress, bytes _calldata);
+error InitializationFunctionReverted(address _initializationContractAddress, bytes4 _functionSelector, bytes _calldata);
 error NotTokenAdmin(address currentAdminAddress);
 
 library LibDomain {
@@ -29,7 +29,10 @@ library LibDomain {
 
     event OwnershipTransferred(address previousOwner, address _newOwner);
     event AdminshipTransferred(address indexed previousAdmin, address indexed newAdmin);
-    event FeatureManagerExecuted(IFeatureManager.Feature[] _features, address _init, bytes _calldata);
+    event FeatureManagerExecuted(IFeatureManager.Feature[] _features, address _initAddress, bytes4 _functionSelector, bytes _calldata);
+
+    
+    error FunctionNotFound(bytes4 _functionSelector);
 
     struct FeatureAddressAndSelectorPosition {
         address featureAddress;
@@ -112,12 +115,11 @@ library LibDomain {
         }        
     }     
 
-
-
     function featureManager(
         IFeatureManager.Feature[] memory _features,
-        address _init,
-        bytes memory _calldata
+        address _initAddress,
+        bytes4 _functionSelector,        
+        bytes memory _calldata     
     ) internal {
         for (uint256 featureIndex; featureIndex < _features.length; featureIndex++) {
             bytes4[] memory functionSelectors = _features[featureIndex].functionSelectors;
@@ -139,8 +141,8 @@ library LibDomain {
             }
         }
 
-        emit FeatureManagerExecuted(_features, _init, _calldata);
-        initializeFeatureManager(_init, _calldata);
+        emit FeatureManagerExecuted(_features, _initAddress, _functionSelector, _calldata);
+        initializeFeatureManager(_initAddress, _functionSelector, _calldata);
     }
 
     function addFunctions(address _FeatureAddress, bytes4[] memory _functionSelectors) internal {  
@@ -154,7 +156,6 @@ library LibDomain {
             bytes4 selector = _functionSelectors[selectorIndex];
             address oldFeatureAddress = ds.featureAddressAndSelectorPosition[selector].featureAddress;
             if(oldFeatureAddress != address(0)) {
-                //revert CannotAddFunctionToDomainThatAlreadyExists(selector);
                 continue;
             }            
             ds.featureAddressAndSelectorPosition[selector] = FeatureAddressAndSelectorPosition(_FeatureAddress, selectorCount);
@@ -218,25 +219,40 @@ library LibDomain {
         }
     }
 
-    function initializeFeatureManager(address _init, bytes memory _calldata) internal {
-        if (_init == address(0)) {
-            return;
+    function initializeFeatureManager(
+        address _initAddress,
+        bytes4 _functionSelector,        
+        bytes memory _calldata   
+    ) internal {
+        if (_initAddress != address(0)) {
+            enforceHasContractCode(_initAddress, "LibFeatureManager: _init address has no code");        
+            (bool success, bytes memory error) = _initAddress.delegatecall(_calldata);
+            //handleInitializationOutcome(success, error, _initAddress, _calldata);
+        } else if (_functionSelector != bytes4(0)){
+            // DomainStorage storage ds = domainStorage();
+            // address feature = ds.featureAddressAndSelectorPosition[_functionSelector].featureAddress;
+            // if(feature == address(0)) {
+            //     revert FunctionNotFound(_functionSelector);
+            // }
+            // assembly {
+            //             // copy function selector and any arguments
+            //             calldatacopy(0, 0, calldatasize())
+            //             // execute function call using the feature
+            //             let result := delegatecall(gas(), feature, 0, calldatasize(), 0, 0)
+            //             // get any return value
+            //             returndatacopy(0, 0, returndatasize())
+            //             // return any return value or error back to the caller
+            //             switch result
+            //                 case 0 {
+            //                     revert(0, returndatasize())
+            //                 }
+            //                 default {
+            //                     return(0, returndatasize())
+            //                 }
+            //         }
         }
-        enforceHasContractCode(_init, "LibFeatureManager: _init address has no code");        
-        (bool success, bytes memory error) = _init.delegatecall(_calldata);
-        if (!success) {
-            if (error.length > 0) {
-                // bubble up error
-                /// @solidity memory-safe-assembly
-                assembly {
-                    let returndata_size := mload(error)
-                    revert(add(32, error), returndata_size)
-                }
-            } else {
-                revert InitializationFunctionReverted(_init, _calldata);
-            }
-        }        
     }
+
 
     function enforceHasContractCode(address _contract, string memory _errorMessage) internal view {
         uint256 contractSize;

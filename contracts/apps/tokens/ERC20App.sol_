@@ -1,0 +1,177 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.10;
+
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
+import { LibDomain } from "../../libraries/LibDomain.sol";
+import { AdminApp } from "../core/AccessControl/AdminApp.sol";
+
+error NotTokenAdmin();
+
+
+library LibTokenERC20 {
+    bytes32 constant DOMAIN_STORAGE_POSITION = keccak256("token.constants");
+
+    event AdminshipTransferred(address indexed previousAdmin, address indexed newAdmin);
+
+    struct ConstantsStates {
+        string name;
+        string symbol;
+        uint8 decimals;
+    }
+
+    struct TokenData {
+        // ERC20 state variables
+        mapping(address => uint256) balances;
+        mapping(address => mapping(address => uint256)) allowances;
+        uint256 totalSupply;
+        address owner;
+        mapping(bytes32 => mapping(address => bool)) roles;
+        bool paused;
+    }    
+
+    function tokenStorage() internal pure returns (LibTokenERC20.TokenData storage ds) {
+        bytes32 position = DOMAIN_STORAGE_POSITION;
+        assembly {
+            ds.slot := position
+        }
+    }
+
+    function domainStorage() internal pure returns (LibTokenERC20.ConstantsStates storage ds) {
+        bytes32 position = DOMAIN_STORAGE_POSITION;
+        assembly {
+            ds.slot := position
+        }
+    }
+
+
+}
+
+
+contract ERC20App is Pausable, ERC20Burnable {
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+
+    modifier onlyRole(bytes32 role ){
+        require(AdminApp(address(this)).hasRole(role, msg.sender), "AccessControl: sender does not have required role");
+        _;
+    }
+
+    constructor(string memory name, string memory symbol, uint256 totalSupply, uint8 decimals) ERC20(name, symbol) {
+        LibTokenERC20.ConstantsStates storage ds = LibTokenERC20.domainStorage();
+        ds.name = name;
+        ds.symbol = symbol;
+        ds.decimals = uint8(decimals);
+        AdminApp(address(this)).grantRole(LibDomain.DEFAULT_ADMIN_ROLE, msg.sender);
+        AdminApp(address(this)).grantRole(PAUSER_ROLE, msg.sender);
+        LibTokenERC20.TokenData storage dsToken = LibTokenERC20.tokenStorage();
+        dsToken.balances[msg.sender] = totalSupply * 10 ** decimals;
+        dsToken.totalSupply = totalSupply * 10 ** decimals;
+    }
+
+
+    function name() public view override returns (string memory)  {
+        LibTokenERC20.ConstantsStates storage ds = LibTokenERC20.domainStorage();
+        return ds.name;
+    }
+
+    function symbol() public view override returns (string memory) {
+        LibTokenERC20.ConstantsStates storage ds = LibTokenERC20.domainStorage();
+        return ds.symbol;
+    }
+
+    function decimals() public view override returns (uint8) {
+        LibTokenERC20.ConstantsStates storage ds = LibTokenERC20.domainStorage();
+        return ds.decimals;
+    }
+ 
+
+    function pause() public onlyRole(PAUSER_ROLE) {
+        LibTokenERC20.TokenData storage ds = LibTokenERC20.tokenStorage();
+        require(!ds.paused, "Already paused");
+        ds.paused = true;
+        emit Paused(msg.sender);
+    }
+
+    function unpause() public onlyRole(PAUSER_ROLE) {
+        LibTokenERC20.TokenData storage ds = LibTokenERC20.tokenStorage();
+        require(ds.paused, "Already unpaused");
+        ds.paused = false;
+        emit Unpaused(msg.sender);
+    }
+
+    function _beforeTokenTransfer(address from, address to, uint256 amount) internal whenNotPaused override {
+        super._beforeTokenTransfer(from, to, amount);
+    }
+
+    function balanceOf(address account) public view override returns (uint256) {
+        LibTokenERC20.TokenData storage ds = LibTokenERC20.tokenStorage();
+        return ds.balances[account];
+    }
+
+    function totalSupply() public view override returns (uint256) {
+        LibTokenERC20.TokenData storage ds = LibTokenERC20.tokenStorage();
+        return ds.totalSupply;
+    }
+
+
+    function approve(address spender, uint256 amount) public virtual override returns (bool){
+        _approve(msg.sender, spender, amount);
+        return true;
+    }
+
+    function transferFrom(address sender, address recipient, uint256 amount) public virtual override returns (bool) {
+        LibTokenERC20.TokenData storage ds = LibTokenERC20.tokenStorage();
+        uint256 currentAllowance = ds.allowances[sender][msg.sender];
+        require(currentAllowance >= amount, "transfer amount exceeds allowance");
+        _transfer(sender, recipient, amount);
+        _approve(sender, msg.sender, currentAllowance - amount);
+        return true;
+    }
+
+    function _transfer(address sender, address recipient, uint256 amount) internal virtual override{
+        require(sender != address(0), "transfer from the zero address");
+        require(recipient != address(0), "transfer to the zero address");
+        LibTokenERC20.TokenData storage ds = LibTokenERC20.tokenStorage();
+        require(ds.balances[sender] >= amount, "transfer amount exceeds balance");
+        ds.balances[sender] = ds.balances[sender] - amount;
+        ds.balances[recipient] = ds.balances[recipient] + amount;
+        emit Transfer(sender, recipient, amount);
+    }
+
+    function _approve(address owner, address spender, uint256 amount) internal virtual override{
+        require(owner != address(0), "approve from the zero address");
+        require(spender != address(0), "approve to the zero address");
+        LibTokenERC20.TokenData storage ds = LibTokenERC20.tokenStorage();
+        require(ds.balances[owner] >= amount, "transfer amount exceeds balance");
+        ds.allowances[owner][spender] = amount;
+        emit Approval(owner, spender, amount);
+    }
+    
+    function burn(uint256 amount) public virtual override {
+        LibTokenERC20.TokenData storage ds = LibTokenERC20.tokenStorage();
+        require(ds.balances[msg.sender] >= amount, "burn amount exceeds balance");
+        ds.balances[msg.sender] = ds.balances[msg.sender] - amount;
+        ds.totalSupply = ds.totalSupply - amount;
+        emit Transfer(msg.sender, address(0), amount);
+    }
+    
+    function burnFrom(address account, uint256 amount) public virtual override {
+        LibTokenERC20.TokenData storage ds = LibTokenERC20.tokenStorage();
+        uint256 currentAllowance = ds.allowances[account][msg.sender];
+        require(currentAllowance >= amount, "transfer amount exceeds allowance");
+        uint256 decreasedAllowance = allowance(account, msg.sender) - amount;
+        ds.allowances[account][msg.sender] = decreasedAllowance;
+        _burn(account, amount);
+    }
+
+    function _burn(address account, uint256 amount) internal virtual override{
+        require(account != address(0), "burn from the zero address");
+        LibTokenERC20.TokenData storage ds = LibTokenERC20.tokenStorage();
+        require(ds.balances[account] >= amount, "burn amount exceeds balance");
+        ds.balances[account] = ds.balances[account] - amount;
+        ds.totalSupply = ds.totalSupply - amount;
+        emit Transfer(account, address(0), amount);
+    }
+
+
+}

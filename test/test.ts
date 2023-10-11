@@ -85,8 +85,9 @@ describe("Domain Global Test", async () => {
                 owner: owner.address,
                 disabled: false,
                 dependencies: [],
-                layer: 0,
-                chanel: 0
+                layer: 0, //core
+                chanel: 0, //public
+                resourceType: 0 //any
             };
     
             // Register the deployed feature in the FeatureStore
@@ -108,11 +109,11 @@ describe("Domain Global Test", async () => {
             author: owner.address,
             owner: owner.address,
             disabled: false,
-            layer: 0,
-            chanel: 0
+            layer: 0, //core
+            chanel: 0, //public
+            resourceType: 0 //domain
         };
     
-       
         // Registering the Core bundle in the FeatureStore
         await featureStoreBase.addBundle(coreBundle);
     });
@@ -123,7 +124,8 @@ describe("Domain Global Test", async () => {
         
         const domainArgs = {
             owner: owner.address,
-            init: ethers.constants.AddressZero,
+            initAddress: ethers.constants.AddressZero,
+            functionSelector: "0x00000000",
             initCalldata: '0x00'
         };
 
@@ -142,6 +144,7 @@ describe("Domain Global Test", async () => {
         adminFeature = await ethers.getContractAt('AdminApp', addressDomain);
         domainManagerFeature = await ethers.getContractAt('DomainManagerApp', addressDomain);
     });
+
     mocha.step("Ensuring that the feature addresses on the contract match those obtained during the implementation deployment", async function () {
         const addresses = [];
         for (const address of await featureRouterFeature.featureAddresses()) {
@@ -152,22 +155,21 @@ describe("Domain Global Test", async () => {
 
     mocha.step("Get function selectors by their feature addresses", async function () {
         let selectors = getSelectors(featureManagerFeature);
-        let result = await featureRouterFeature.featureFunctionSelectors(featureToAddressImplementation['FeatureManagerApp']);
-       
+        let result = await featureRouterFeature.featureFunctionSelectors(featureToAddressImplementation['FeatureManagerApp']);    
         expect(result).to.have.members(selectors);
+
         selectors = getSelectors(featureRouterFeature);
         result = await featureRouterFeature.featureFunctionSelectors(featureToAddressImplementation['FeatureRoutesApp']);
-
         expect(result).to.have.members(selectors);
+
         selectors = getSelectors(ownershipFeature);
         result = await featureRouterFeature.featureFunctionSelectors(featureToAddressImplementation['OwnershipApp']);
-
         expect(result).to.have.members(selectors);
     });
 
     mocha.step("Get feature addresses by selectors related to these features", async function () {
         expect(featureToAddressImplementation['FeatureManagerApp']).to.equal(
-            await featureRouterFeature.featureAddress("0x928b1d82") //featureManager(Feature[] calldata _featureManager, address _init, bytes calldata _calldata)
+            await featureRouterFeature.featureAddress("0x68b0c074") //featureManager(Feature[] calldata _featureManager, address _init, bytes calldata _calldata)
         );
         expect(featureToAddressImplementation['FeatureRoutesApp']).to.equal(
             await featureRouterFeature.featureAddress("0x7f27b0d6") // features()
@@ -228,7 +230,7 @@ describe("Domain Global Test", async () => {
     //     assert.equal(await constantsFeature.symbol(), symbol);
     //     assert.equal(await constantsFeature.decimals(), decimals);
     //     assert.equal(await constantsFeature.admin(), admin.address);
-    // });
+    // });a
 
     // mocha.step("Deploying implementation with a transfer function", async function () {
     //     const BalancesFeature = await ethers.getContractFactory("BalancesFeature");
@@ -331,38 +333,49 @@ describe("Domain Global Test", async () => {
     async function testAdminAppFunctions(domainAddress: string = addressDomain) {
         const DEFAULT_ADMIN_ROLE = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('DEFAULT_ADMIN_ROLE'));
         const dummyRole = ethers.utils.keccak256(ethers.utils.toUtf8Bytes('DUMMY_ROLE'));
-
+    
         adminFeature = await ethers.getContractAt('AdminApp', domainAddress);
-        // Grant the DEFAULT_ADMIN_ROLE to the owner
-        await adminFeature.connect(owner).grantRole(DEFAULT_ADMIN_ROLE, domainAddress);
-        await adminFeature.connect(owner).grantRole(DEFAULT_ADMIN_ROLE, owner.address);
-
-        // Now, the owner can set the admin role for the dummyRole
-        await adminFeature.connect(owner).setRoleAdmin(dummyRole, DEFAULT_ADMIN_ROLE);
     
-        // Now the owner can grant the dummyRole to user1
-        await adminFeature.connect(owner).grantRole(dummyRole, user1.address);
-        expect(await adminFeature.hasRole(dummyRole, user1.address)).to.be.true;
-
-        await adminFeature.connect(owner).grantRole(dummyRole, user2.address);
-        expect(await adminFeature.hasRole(dummyRole, user2.address)).to.be.true;
-        
-        await adminFeature.connect(owner).grantRole(dummyRole, user3.address);
-        expect(await adminFeature.hasRole(dummyRole, user3.address)).to.be.true;        
+        describe("Admin App Functions Tests domain: "+ domainAddress, async () => {
+            
+            it("Should grant DEFAULT_ADMIN_ROLE to the owner", async () => {
+                await adminFeature.connect(owner).grantRole(DEFAULT_ADMIN_ROLE, domainAddress);
+                await adminFeature.connect(owner).grantRole(DEFAULT_ADMIN_ROLE, owner.address);
+            });
     
-        // Example: Grant a role to an address
-        await adminFeature.connect(owner).grantRole(DEFAULT_ADMIN_ROLE, user1.address);
-        expect(await adminFeature.hasRole(DEFAULT_ADMIN_ROLE, user1.address)).to.be.true;
-
-        // Revoke the role from the address
-        await adminFeature.connect(owner).revokeRole(dummyRole, user1.address);
-        expect(await adminFeature.hasRole(dummyRole, user1.address)).to.be.true;
-
-        await adminFeature.connect(owner).revokeRole(DEFAULT_ADMIN_ROLE, user1.address);
-        expect(await adminFeature.hasRole(DEFAULT_ADMIN_ROLE, user1.address)).to.be.false;   
-        
-        expect(await adminFeature.hasRole(dummyRole, user1.address)).to.be.false;        
+            it("Owner should be able to set the admin role for the dummyRole", async () => {
+                await adminFeature.connect(owner).setRoleAdmin(dummyRole, DEFAULT_ADMIN_ROLE);
+            });
+    
+            it("Owner should be able to grant the dummyRole to users", async () => {
+                await adminFeature.connect(owner).grantRole(dummyRole, user1.address);
+                expect(await adminFeature.hasRole(dummyRole, user1.address)).to.be.true;
+    
+                await adminFeature.connect(owner).grantRole(dummyRole, user2.address);
+                expect(await adminFeature.hasRole(dummyRole, user2.address)).to.be.true;
+                
+                await adminFeature.connect(owner).grantRole(dummyRole, user3.address);
+                expect(await adminFeature.hasRole(dummyRole, user3.address)).to.be.true;
+            });
+    
+            it("Owner should be able to grant and revoke DEFAULT_ADMIN_ROLE to user1", async () => {
+                await adminFeature.connect(owner).grantRole(DEFAULT_ADMIN_ROLE, user1.address);
+                expect(await adminFeature.hasRole(DEFAULT_ADMIN_ROLE, user1.address)).to.be.true;
+    
+                await adminFeature.connect(owner).revokeRole(DEFAULT_ADMIN_ROLE, user1.address);
+                expect(await adminFeature.hasRole(DEFAULT_ADMIN_ROLE, user1.address)).to.be.false;
+            });
+    
+            it("Owner should be able to revoke dummyRole from users", async () => {
+                await adminFeature.connect(owner).revokeRole(dummyRole, user1.address);
+                expect(await adminFeature.hasRole(dummyRole, user1.address)).to.be.false;
+    
+                // Add similar assertions for other users if necessary
+            });
+        });
     }
+    
+    
 
     mocha.step("Testing AdminApp's functionalities", async function(){ await testAdminAppFunctions(addressDomain); });
 
@@ -374,7 +387,8 @@ describe("Domain Global Test", async () => {
             features: [],  // Assuming no features are added initially
             args: {
                 owner: owner.address,
-                init: ethers.constants.AddressZero,
+                initAddress: ethers.constants.AddressZero,
+                functionSelector: "0x00000000",
                 initCalldata: '0x00'
             }
         };
@@ -384,7 +398,8 @@ describe("Domain Global Test", async () => {
             features: [],
             args: {
                 owner: owner.address,
-                init: ethers.constants.AddressZero,
+                initAddress: ethers.constants.AddressZero,
+                functionSelector: "0x00000000",
                 initCalldata: '0x00'
             }
         };
@@ -414,7 +429,8 @@ describe("Domain Global Test", async () => {
             features: [],  // Assuming no features are added initially
             args: {
                 owner: owner.address,
-                init: ethers.constants.AddressZero,
+                initAddress: ethers.constants.AddressZero,
+                functionSelector: "0x00000000",
                 initCalldata: '0x00'
             }
         };
@@ -424,7 +440,8 @@ describe("Domain Global Test", async () => {
             features: [],
             args: {
                 owner: owner.address,
-                init: ethers.constants.AddressZero,
+                initAddress: ethers.constants.AddressZero,
+                functionSelector: "0x00000000",
                 initCalldata: '0x00'
             }
         };
@@ -452,9 +469,9 @@ describe("Domain Global Test", async () => {
         const features = [{
             featureAddress: ethers.constants.AddressZero,
             action: FeatureAction.Remove,
-            functionSelectors: ['0x928b1d82'] //featureManager(Feature[] calldata _featureManager, address _init, bytes calldata _calldata)
+            functionSelectors: ['0x8da5cb5b'] //featureManager(Feature[] calldata _featureManager, address _init, bytes calldata _calldata)
         }];
-        await featureManagerFeature.connect(owner).FeatureManager(features, ethers.constants.AddressZero, "0x00");
+        await featureManagerFeature.connect(owner).FeatureManager(features, ethers.constants.AddressZero, "0x00000000", "0x00");
     });
         
 });

@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import { LibBalances } from "../../libraries/ERC20/LibBalances.sol";
-import { LibAllowances } from "../../libraries/ERC20/LibAllowances.sol";
+import { LibBalances } from "./BalancesApp.sol";
 
 library LibAllowances {
     bytes32 constant DOMAIN_STORAGE_POSITION = keccak256("token.allowances");

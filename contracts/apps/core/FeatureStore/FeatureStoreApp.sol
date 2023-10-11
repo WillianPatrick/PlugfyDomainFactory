@@ -9,7 +9,7 @@ import { IFeatureManager } from "../FeatureManager/IFeatureManager.sol";
 
 library LibFeatureStore {
 
-    enum ResourcesFor {
+    enum ResourceType {
         Domains,
         Features,
         Any
@@ -85,6 +85,7 @@ library LibFeatureStore {
         bytes32[] dependencies;
         LayersType layer;
         ChanelType chanel;
+        ResourceType resourceType;
     }
 
     struct BundleFeaturesFunctions {
@@ -100,10 +101,11 @@ library LibFeatureStore {
         bool disabled;
         LayersType layer;
         ChanelType chanel;
+        ResourceType resourceType;
     }
 
     struct Storage {
-        mapping(ChanelType => mapping(ResourcesFor => mapping(TargetType => mapping(LayersType => bytes32[])))) targetItems;
+        mapping(ChanelType => mapping(ResourceType => mapping(TargetType => mapping(LayersType => bytes32[])))) targetItems;
         mapping(bytes32 => Feature) addressFeature;
         mapping(bytes32 => Function) functions;
         mapping(bytes32 => Dependence) dependencies;

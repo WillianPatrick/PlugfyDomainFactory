@@ -2,15 +2,15 @@
 pragma solidity ^0.8.0;
 
 import { LibDomain } from "./libraries/LibDomain.sol";
-import { IFeatureManager } from "./apps/core/FeatureManager/IFeatureManager.sol";
+import "./apps/core/FeatureManager/IFeatureManager.sol";
 
 error FunctionNotFound(bytes4 _functionSelector);
 
 struct DomainArgs {
     address owner;
-    address init;
+    address initAddress;
+    bytes4 functionSelector;
     bytes initCalldata;
-    //bytes32 storageKey; // Added this for dynamic storage
 }
 
 contract Domain {
@@ -20,7 +20,7 @@ contract Domain {
         LibDomain.setSuperAdmin(address(msg.sender));
         LibDomain.domainStorage().parentDomain = _parentDomain;
         LibDomain.domainStorage().name = _domainName;
-        LibDomain.featureManager(_featureManager, _args.init, _args.initCalldata);
+        LibDomain.featureManager(_featureManager, _args.initAddress, _args.functionSelector, _args.initCalldata);
     }
 
     // Find feature for function that is called and execute the
