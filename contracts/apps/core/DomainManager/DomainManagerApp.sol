@@ -28,28 +28,19 @@ contract DomainManagerApp  {
     function createDomain(address _parentDomain, string memory _domainName, IFeatureManager.Feature[] memory _features, DomainArgs memory _args) public returns (address) {
         LibDomainManager.DomainStorage storage ds = LibDomainManager.domainStorage();
         _args.owner = _args.owner == address(0) ? msg.sender : _args.owner;
-        
         Domain domain = new Domain(_parentDomain, _domainName, _features, _args);
         ds.domains.push(address(domain));
-
-        // Grant the DEFAULT_ADMIN_ROLE to the owner
         IAdminApp(address(domain)).grantRole(LibDomainManager.DEFAULT_ADMIN_ROLE, _args.owner);
-
-        // Grant the DEFAULT_ADMIN_ROLE to the Domain itself
         IAdminApp(address(domain)).grantRole(LibDomainManager.DEFAULT_ADMIN_ROLE, address(this));
-
         IAdminApp(address(domain)).grantRole(LibDomainManager.DEFAULT_ADMIN_ROLE, address(domain));
-
         emit DomainCreated(address(domain), _args.owner);
         return address(domain);
     }
 
-    // Retrieve the total number of Domains created by this factory.
     function getTotalDomains() external view returns (uint256) {
         return LibDomainManager.domainStorage().domains.length;
     }
 
-    // Retrieve the address of a specific Domain.
     function getDomainAddress(uint256 _index) external view returns (address) {
         require(_index < LibDomainManager.domainStorage().domains.length, "Index out of bounds");
         return LibDomainManager.domainStorage().domains[_index];
