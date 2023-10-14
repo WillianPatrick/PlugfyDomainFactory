@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.10;
+pragma solidity ^0.8.17;
 
 import { Domain, DomainArgs } from "./Domain.sol";
 import { IFeatureManager } from "./interfaces/IFeatureManager.sol";

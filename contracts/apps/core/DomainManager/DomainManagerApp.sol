@@ -1,14 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.10;
+pragma solidity ^0.8.17;
 
-import { LibDomain } from "../../../libraries/LibDomain.sol";
-import { Domain, DomainArgs } from "../../../Domain.sol";
-import { IDomainManager } from "./IDomainManager.sol";
-import { AdminApp } from "../AccessControl/AdminApp.sol";
-import { OwnershipApp } from "../AccessControl/OwnershipApp.sol";
-import { FeatureManagerApp, IFeatureManager } from "../FeatureManager/FeatureManagerApp.sol";
-import { FeatureRoutesApp } from "../FeatureManager/FeatureRoutesApp.sol";
-
+import { Domain, DomainArgs, IFeatureManager } from "../../../Domain.sol";
+import { IAdminApp } from "../AccessControl/AdminApp.sol";
 
 library LibDomainManager {
     bytes32 constant DEFAULT_ADMIN_ROLE = keccak256("DEFAULT_ADMIN_ROLE");
@@ -17,11 +11,6 @@ library LibDomainManager {
     struct DomainStorage{
         address owner;
         address[] domains;
-        
-        FeatureManagerApp featureManagerInstance;
-        FeatureRoutesApp featureRoutesInstance;
-        AdminApp adminInstance;
-        OwnershipApp ownershipInstance;
     }
 
     function domainStorage() internal pure returns (DomainStorage storage ds) {
@@ -36,13 +25,6 @@ library LibDomainManager {
 contract DomainManagerApp  {
 
     event DomainCreated(address indexed domainAddress, address indexed owner);
-
-    modifier onlyOwner() {
-        LibDomainManager.DomainStorage memory ds = LibDomainManager.domainStorage();
-        require(msg.sender == ds.owner, "Not contract owner");
-        _;
-    }
-
     function createDomain(address _parentDomain, string memory _domainName, IFeatureManager.Feature[] memory _features, DomainArgs memory _args) public returns (address) {
         LibDomainManager.DomainStorage storage ds = LibDomainManager.domainStorage();
         _args.owner = _args.owner == address(0) ? msg.sender : _args.owner;
@@ -51,12 +33,12 @@ contract DomainManagerApp  {
         ds.domains.push(address(domain));
 
         // Grant the DEFAULT_ADMIN_ROLE to the owner
-        AdminApp(address(domain)).grantRole(LibDomainManager.DEFAULT_ADMIN_ROLE, _args.owner);
+        IAdminApp(address(domain)).grantRole(LibDomainManager.DEFAULT_ADMIN_ROLE, _args.owner);
 
         // Grant the DEFAULT_ADMIN_ROLE to the Domain itself
-        AdminApp(address(domain)).grantRole(LibDomainManager.DEFAULT_ADMIN_ROLE, address(this));
+        IAdminApp(address(domain)).grantRole(LibDomainManager.DEFAULT_ADMIN_ROLE, address(this));
 
-        AdminApp(address(domain)).grantRole(LibDomainManager.DEFAULT_ADMIN_ROLE, address(domain));
+        IAdminApp(address(domain)).grantRole(LibDomainManager.DEFAULT_ADMIN_ROLE, address(domain));
 
         emit DomainCreated(address(domain), _args.owner);
         return address(domain);

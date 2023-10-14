@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.17;
 
 // The functions in FeatureManagerViewerFeature MUST be added to a domain.
 // The EIP-2535 Domain standard requires these functions.

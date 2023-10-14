@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.17;
 
 import { LibDomain } from "./libraries/LibDomain.sol";
-import "./apps/core/FeatureManager/IFeatureManager.sol";
+import { IFeatureManager } from "./apps/core/FeatureManager/IFeatureManager.sol";
 
 error FunctionNotFound(bytes4 _functionSelector);
 
@@ -11,6 +11,7 @@ struct DomainArgs {
     address initAddress;
     bytes4 functionSelector;
     bytes initCalldata;
+    bool forceInitialize;
 }
 
 contract Domain {
@@ -20,7 +21,7 @@ contract Domain {
         LibDomain.setSuperAdmin(address(msg.sender));
         LibDomain.domainStorage().parentDomain = _parentDomain;
         LibDomain.domainStorage().name = _domainName;
-        LibDomain.featureManager(_featureManager, _args.initAddress, _args.functionSelector, _args.initCalldata);
+        LibDomain.featureManager(_featureManager, _args.initAddress, _args.functionSelector, _args.initCalldata, _args.forceInitialize);
     }
 
     // Find feature for function that is called and execute the
@@ -35,7 +36,7 @@ contract Domain {
 
         bytes4 functionSelector = msg.sig;
 
-        require(!ds.paused, "DomainControl: This domain is currently paused and is not in operation");
+        require(!ds.paused || ds.superAdmin == msg.sender || ds.contractOwner == msg.sender, "DomainControl: This domain is currently paused and is not in operation");
         if (ds.functionRoles[functionSelector] != bytes32(0)) {
             require(ds.accessControl[functionSelector][msg.sender], "DomainControl: sender does not have access to this function");
         }
@@ -44,7 +45,7 @@ contract Domain {
             revert FunctionNotFound(msg.sig);
         }
 
-        require(!ds.pausedFeatures[feature], "FeatureControl: This feature and functions are currently paused and not in operation");
+        require(!ds.pausedFeatures[feature] || ds.superAdmin == msg.sender || ds.contractOwner == msg.sender, "FeatureControl: This feature and functions are currently paused and not in operation");
         // Execute external function from feature using delegatecall and return any value.
         assembly {
             // copy function selector and any arguments

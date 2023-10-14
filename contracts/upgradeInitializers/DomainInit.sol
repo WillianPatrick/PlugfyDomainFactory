@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.17;
 
 //import { LibERC20Constants } from "../libraries/ERC20/LibConstants.sol";
 //import { LibBalances } from "../libraries/ERC20/LibBalances.sol";
