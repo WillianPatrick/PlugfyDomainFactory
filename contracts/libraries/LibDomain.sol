@@ -181,7 +181,6 @@ library LibDomain {
         for (uint256 selectorIndex; selectorIndex < _functionSelectors.length; selectorIndex++) {
             bytes4 selector = _functionSelectors[selectorIndex];
             address oldFeatureAddress = domainStorage().featureAddressAndSelectorPosition[selector].featureAddress;
-            // can't replace immutable functions -- functions defined directly in the domain in this case
             if(oldFeatureAddress == address(this)) {
                 revert CannotReplaceImmutableFunction(selector);
             }
@@ -191,7 +190,6 @@ library LibDomain {
             if(oldFeatureAddress == address(0)) {
                 revert CannotReplaceFunctionThatDoesNotExists(selector);
             }
-            // replace old feature address
             domainStorage().featureAddressAndSelectorPosition[selector].featureAddress = _FeatureAddress;
         }
     }
@@ -208,19 +206,15 @@ library LibDomain {
             if(oldFeatureAddressAndSelectorPosition.featureAddress == address(0)) {
                 revert CannotRemoveFunctionThatDoesNotExist(selector);
             }        
-            
-            // can't remove immutable functions -- functions defined directly in the domain
             if(oldFeatureAddressAndSelectorPosition.featureAddress == address(this)) {
                 revert CannotRemoveImmutableFunction(selector);
             }
-            // replace selector with last selector
             selectorCount--;
             if (oldFeatureAddressAndSelectorPosition.selectorPosition != selectorCount) {
                 bytes4 lastSelector = domainStorage().selectors[selectorCount];
                 domainStorage().selectors[oldFeatureAddressAndSelectorPosition.selectorPosition] = lastSelector;
                 domainStorage().featureAddressAndSelectorPosition[lastSelector].selectorPosition = oldFeatureAddressAndSelectorPosition.selectorPosition;
             }
-            // delete last selector
             domainStorage().selectors.pop();
             delete domainStorage().featureAddressAndSelectorPosition[selector];
         }
@@ -239,30 +233,26 @@ library LibDomain {
             domainStorage().initializedFeatures[_initAddress] = success;
             //handleInitializationOutcome(success, error, _initAddress, _functionSelector, _calldata, _force);
         } else if (_functionSelector != bytes4(0)){
-            // address feature = domainStorage().featureAddressAndSelectorPosition[_functionSelector].featureAddress;
-            // if((_force || !domainStorage().initializedFeatures[address])){
-            //     if(feature == address(0)) {
-            //         revert FunctionNotFound(_functionSelector);
-            //     }
-            //     assembly {
-            //                 // copy function selector and any arguments
-            //                 calldatacopy(0, 0, calldatasize())
-            //                 // execute function call using the feature
-            //                 let result := delegatecall(gas(), feature, 0, calldatasize(), 0, 0)
-            //                 // get any return value
-            //                 returndatacopy(0, 0, returndatasize())
-            //                 // return any return value or error back to the caller
-            //                 switch result
-            //                     case 0 {
-            //                         domainStorage().initializedFeatures[feature] = false;
-            //                         revert(0, returndatasize())
-            //                     }
-            //                     default {
-            //                         domainStorage().initializedFeatures[feature] = success;
-            //                         return(0, returndatasize())
-            //                     }
-            //             }
-            //}
+            address feature = domainStorage().featureAddressAndSelectorPosition[_functionSelector].featureAddress;
+            if((_force || !domainStorage().initializedFeatures[feature])){
+                if(feature == address(0)) {
+                    revert FunctionNotFound(_functionSelector);
+                }
+                domainStorage().initializedFeatures[feature] = true;
+                assembly {
+                            calldatacopy(0, 0, calldatasize())
+                            let result := delegatecall(gas(), feature, 0, calldatasize(), 0, 0)
+                            returndatacopy(0, 0, returndatasize())
+                            switch result
+                                case 0 {
+                                    revert(0, returndatasize())
+                                }
+                                default {
+                                    return(0, returndatasize())
+                                }
+                        }
+            
+            }
         }
     }
 
