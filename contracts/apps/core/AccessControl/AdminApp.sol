@@ -27,6 +27,10 @@ interface IAdminApp {
     function pauseFeatures(address[] memory _featureAddress) external;
 
     function unpauseFeatures(address[] memory _featureAddress) external;
+
+    function setReentrancyGuard(bytes4 _functionSelector, bool _enabled) external;
+    
+    function getReentrancyGuard(bytes4 _functionSelector) external view returns(bool);
 }
 
 contract AdminApp is IAdminApp {
@@ -139,4 +143,12 @@ contract AdminApp is IAdminApp {
             }
         }
     }     
+
+    function setReentrancyGuard(bytes4 _functionSelector, bool _enabled) public {
+        LibDomain.setReentrancyGuard(_functionSelector, _enabled);
+    }
+    
+    function getReentrancyGuard(bytes4 _functionSelector) public view returns(bool) {
+        return LibDomain.getReentrancyGuard(_functionSelector);
+    }        
 }

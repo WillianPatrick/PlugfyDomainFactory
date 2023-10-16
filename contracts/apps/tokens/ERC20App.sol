@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
-
-import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
-import "@openzeppelin/contracts/security/Pausable.sol";
 import { LibDomain } from "../../libraries/LibDomain.sol";
+import { IAdminApp } from "../core/AccessControl/AdminApp.sol";
 
 error NotTokenAdmin();
 
@@ -23,6 +21,7 @@ library LibTokenERC20 {
         uint256 totalSupply;
         address owner;
         mapping(bytes32 => mapping(address => bool)) roles;
+        bool initialized;
         bool paused;
     }    
 
@@ -37,17 +36,27 @@ library LibTokenERC20 {
 
 
 contract ERC20App {
-    
+    event ValueReceived(address user, uint amount);
     event Approval(address indexed owner, address indexed spender, uint256 value);
     event Transfer(address indexed from, address indexed to, uint256 value);
 
     function _init(string memory _name, string memory _symbol, uint256 _totalSupply, uint8 _decimals) public {
         LibTokenERC20.TokenData storage ds = LibTokenERC20.domainStorage();
+        require(!ds.initialized, "Initialization has already been executed.");
+        
+        IAdminApp(address(this)).setReentrancyGuard(bytes4(keccak256(bytes("transfer(address,uint256)"))), true);
+        IAdminApp(address(this)).setReentrancyGuard(bytes4(keccak256(bytes("approve(address,uint256)"))), true);
+        IAdminApp(address(this)).setReentrancyGuard(bytes4(keccak256(bytes("transferFrom(address,address,uint256)"))), true);
+        IAdminApp(address(this)).setReentrancyGuard(bytes4(keccak256(bytes("burn(uint256)"))), true);
+        IAdminApp(address(this)).setReentrancyGuard(bytes4(keccak256(bytes("burnFrom(address,uint256)"))), true);   
+
         ds.name = _name;
         ds.symbol = _symbol;
         ds.decimals = uint8(_decimals);
-        ds.balances[msg.sender] = _totalSupply * 10 ** _decimals;
-        ds.totalSupply = _totalSupply * 10 ** _decimals;
+        ds.balances[msg.sender] = _totalSupply;
+        ds.totalSupply = _totalSupply;
+        ds.initialized = true;
+     
     }
 
     function name() public view  returns (string memory)  {
@@ -139,5 +148,19 @@ contract ERC20App {
         emit Transfer(account, address(0), amount);
     }
 
+   
+    receive() external payable {
+        emit ValueReceived(msg.sender, msg.value);
+    }
 
+    function receive() external payable {
+        emit ValueReceived(msg.sender, msg.value);
+    }
+
+    function onERC20Received(
+        uint256 amount
+    ) external returns (bytes4) {
+        return this.onERC20Received.selector;
+    }
+  
 }

@@ -4,8 +4,6 @@ pragma solidity ^0.8.17;
 import { LibDomain } from "./libraries/LibDomain.sol";
 import { IFeatureManager } from "./apps/core/FeatureManager/IFeatureManager.sol";
 
-error FunctionNotFound(bytes4 _functionSelector);
-
 struct DomainArgs {
     address owner;
     address initAddress;
@@ -17,6 +15,7 @@ struct DomainArgs {
 contract Domain {
 
     constructor(address _parentDomain, string memory _domainName, IFeatureManager.Feature[] memory _featureManager, DomainArgs memory _args) {
+        LibDomain.domainStorage().notEntered = true;
         LibDomain.setContractOwner(_args.owner);
         LibDomain.setSuperAdmin(address(msg.sender));
         LibDomain.domainStorage().parentDomain = _parentDomain;
@@ -24,9 +23,27 @@ contract Domain {
         LibDomain.featureManager(_featureManager, _args.initAddress, _args.functionSelector, _args.initCalldata, _args.forceInitialize);
     }
 
-    // Find feature for function that is called and execute the
-    // function if a feature is found and return any value.
+    function checkNonReentrant(bytes4 functionSelector) internal {
+        require(LibDomain.domainStorage().notEntered, "ReentrancyGuard: reentrant call");
+        if(LibDomain.domainStorage().selectorsReentrancyGuard[functionSelector]) {
+            LibDomain.domainStorage().notEntered = false;
+        }
+    }
+
     fallback() external payable {
+        checkNonReentrant(msg.sig);
+        delegateToFeature(msg.sig);
+        LibDomain.domainStorage().notEntered = true;
+    }
+
+    receive() external payable {
+        checkNonReentrant(bytes4(keccak256(bytes("receive()"))));
+        bytes4 receiveSelector = bytes4(keccak256(bytes("receive()")));
+        delegateToFeature(receiveSelector);
+        LibDomain.domainStorage().notEntered = true;
+    }
+
+    function delegateToFeature(bytes4 functionSelector) internal {
         LibDomain.DomainStorage storage ds;
         bytes32 position = LibDomain.DOMAIN_STORAGE_POSITION;
         // get domain storage
@@ -34,15 +51,13 @@ contract Domain {
             ds.slot := position
         }
 
-        bytes4 functionSelector = msg.sig;
-
         require(!ds.paused || ds.superAdmin == msg.sender || ds.contractOwner == msg.sender, "DomainControl: This domain is currently paused and is not in operation");
         if (ds.functionRoles[functionSelector] != bytes32(0)) {
             require(ds.accessControl[functionSelector][msg.sender], "DomainControl: sender does not have access to this function");
         }
-        address feature = ds.featureAddressAndSelectorPosition[msg.sig].featureAddress;
+        address feature = ds.featureAddressAndSelectorPosition[functionSelector].featureAddress;
         if(feature == address(0)) {
-            revert FunctionNotFound(msg.sig);
+            revert LibDomain.FunctionNotFound(functionSelector);
         }
 
         require(!ds.pausedFeatures[feature] || ds.superAdmin == msg.sender || ds.contractOwner == msg.sender, "FeatureControl: This feature and functions are currently paused and not in operation");
@@ -50,7 +65,7 @@ contract Domain {
         assembly {
             // copy function selector and any arguments
             calldatacopy(0, 0, calldatasize())
-             // execute function call using the feature
+            // execute function call using the feature
             let result := delegatecall(gas(), feature, 0, calldatasize(), 0, 0)
             // get any return value
             returndatacopy(0, 0, returndatasize())
@@ -65,5 +80,4 @@ contract Domain {
         }
     }
 
-    receive() external payable {}
 }

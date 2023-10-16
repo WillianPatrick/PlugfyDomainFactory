@@ -146,6 +146,7 @@ describe("Domain Global Test", async () => {
         const domain = await Domain.deploy(ethers.constants.AddressZero, "Main Domain", features, _args);
         await domain.deployed();
         addressDomain = domain.address;
+        console.log("       -> at address: "+ addressDomain);
     });
 
     mocha.step("Initialization of service contracts", async function () {
@@ -223,9 +224,9 @@ describe("Domain Global Test", async () => {
 
     // ERC20:
     mocha.step("Test ERC20 Initialize", async function () {
-        await featureERC20App.connect(owner)._init("Token Name",
+        await featureERC20App._init("Token Name",
             "Token Symbol",
-            2500000,
+            2500000000000000000000000n,
             18
         );
 

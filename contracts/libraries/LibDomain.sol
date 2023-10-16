@@ -22,7 +22,10 @@ error CannotRemoveImmutableFunction(bytes4 _selector);
 error InitializationFunctionReverted(address _initializationContractAddress, bytes4 _functionSelector, bytes _calldata);
 error NotTokenAdmin(address currentAdminAddress);
 
+
 library LibDomain {
+    error FunctionNotFound(bytes4 _functionSelector);
+
     bytes32 constant DOMAIN_STORAGE_POSITION = keccak256("domain.standard.storage");
     bytes32 constant DEFAULT_ADMIN_ROLE = keccak256("DEFAULT_ADMIN_ROLE");
     bytes32 constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
@@ -30,9 +33,6 @@ library LibDomain {
     event OwnershipTransferred(address previousOwner, address _newOwner);
     event AdminshipTransferred(address indexed previousAdmin, address indexed newAdmin);
     event FeatureManagerExecuted(IFeatureManager.Feature[] _features, address _initAddress, bytes4 _functionSelector, bytes _calldata, bool _force);
-
-    
-    error FunctionNotFound(bytes4 _functionSelector);
 
     struct FeatureAddressAndSelectorPosition {
         address featureAddress;
@@ -56,8 +56,9 @@ library LibDomain {
         mapping(bytes4 => bytes32) functionRoles;
         mapping(bytes32 => mapping(bytes32 => bytes32)) roles;
         bool paused;
+        bool notEntered;
+        mapping(bytes4 => bool) selectorsReentrancyGuard;
     }
-
 
     function enforceIsTokenSuperAdmin() internal view {
         if(msg.sender != domainStorage().superAdmin) {
@@ -75,6 +76,15 @@ library LibDomain {
         domainStorage().accessControl[PAUSER_ROLE][previousAdmin] = false;    
         emit AdminshipTransferred(previousAdmin, _newAdmin);
     }
+
+    function setReentrancyGuard(bytes4 _functionSelector, bool _enabled) internal {
+        enforceIsContractOwnerAdmin();
+        domainStorage().selectorsReentrancyGuard[_functionSelector] = _enabled;
+    }
+
+    function getReentrancyGuard(bytes4 _functionSelector) internal view returns(bool) {
+        return domainStorage().selectorsReentrancyGuard[_functionSelector];
+    }   
 
     function domainStorage() internal pure returns (DomainStorage storage ds) {
         bytes32 position = DOMAIN_STORAGE_POSITION;
@@ -111,13 +121,13 @@ library LibDomain {
     }   
 
     function enforceIsContractOwnerAdmin() internal view {
-        if(address(0) != domainStorage().contractOwner  && address(0) != domainStorage().superAdmin && msg.sender != domainStorage().contractOwner && msg.sender != domainStorage().superAdmin) {
+        if(address(0) != domainStorage().contractOwner  && address(0) != domainStorage().superAdmin  && msg.sender != domainStorage().parentDomain && msg.sender != domainStorage().contractOwner && msg.sender != domainStorage().superAdmin && !domainStorage().accessControl[DEFAULT_ADMIN_ROLE][msg.sender] && !domainStorage().accessControl[domainStorage().roleAdmins[DEFAULT_ADMIN_ROLE]][msg.sender]) {
             revert NotContractOwner(msg.sender, domainStorage().contractOwner);
         }        
     } 
 
     function enforceIsContractOwner() internal view {
-        if(address(0) != domainStorage().contractOwner  && address(0) != domainStorage().superAdmin &&msg.sender != domainStorage().contractOwner) {
+        if(address(0) != domainStorage().contractOwner  && address(0) != domainStorage().superAdmin && msg.sender != domainStorage().contractOwner) {
             revert NotContractOwner(msg.sender, domainStorage().contractOwner);
         }        
     }     

@@ -30,9 +30,17 @@ contract DomainManagerApp  {
         _args.owner = _args.owner == address(0) ? msg.sender : _args.owner;
         Domain domain = new Domain(_parentDomain, _domainName, _features, _args);
         ds.domains.push(address(domain));
+
+        IAdminApp(address(domain)).setRoleAdmin(LibDomainManager.DEFAULT_ADMIN_ROLE, LibDomainManager.DEFAULT_ADMIN_ROLE);
         IAdminApp(address(domain)).grantRole(LibDomainManager.DEFAULT_ADMIN_ROLE, _args.owner);
+
+        if(_parentDomain != address(0)){
+            IAdminApp(address(domain)).grantRole(LibDomainManager.DEFAULT_ADMIN_ROLE, _parentDomain);
+        }
+
         IAdminApp(address(domain)).grantRole(LibDomainManager.DEFAULT_ADMIN_ROLE, address(this));
         IAdminApp(address(domain)).grantRole(LibDomainManager.DEFAULT_ADMIN_ROLE, address(domain));
+        IAdminApp(address(domain)).grantRole(LibDomainManager.DEFAULT_ADMIN_ROLE, address(msg.sender));
         emit DomainCreated(address(domain), _args.owner);
         return address(domain);
     }
