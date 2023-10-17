@@ -32,15 +32,15 @@ contract Domain {
 
     fallback() external payable {
         checkNonReentrant(msg.sig);
-        delegateToFeature(msg.sig);
         LibDomain.domainStorage().notEntered = true;
+        delegateToFeature(msg.sig);
     }
 
     receive() external payable {
         checkNonReentrant(bytes4(keccak256(bytes("receive()"))));
         bytes4 receiveSelector = bytes4(keccak256(bytes("receive()")));
-        delegateToFeature(receiveSelector);
         LibDomain.domainStorage().notEntered = true;
+        delegateToFeature(receiveSelector);
     }
 
     function delegateToFeature(bytes4 functionSelector) internal {

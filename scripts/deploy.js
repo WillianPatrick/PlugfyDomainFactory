@@ -215,7 +215,7 @@ let featuresBundle;
     let extensibleFeatures = [...features];
 
     // Create the "VickAi" subdomain of the "Plugfy" domain
-    const ERC20App = await ethers.getContractFactory('ERC20App');
+    const ERC20App = await ethers.getContractFactory('TokenDexApp');
     const erc20App = await ERC20App.deploy();
     await erc20App.deployed();
     const costForERC20App = await getTransactionCost(erc20App.deployTransaction);
@@ -247,7 +247,7 @@ let featuresBundle;
     //     console.log(`                 - Set Reentrancy Guard for function ${functionName} at a cost of: ${costForSetGuard} ETH`);
     // }    
     
-    const vickAiERC20TokenSeedFeature = await ethers.getContractAt('ERC20App', addressVickAiTokenSeedDomain);
+    const vickAiERC20TokenSeedFeature = await ethers.getContractAt('TokenDexApp', addressVickAiTokenSeedDomain);
     const initTx = await vickAiERC20TokenSeedFeature._init("Vick Ai Seed","VICK-S", 2500000000000000000000000n, 18);
     const costForInit = await getTransactionCost(initTx);
     totalCost = totalCost.add(ethers.utils.parseEther(costForInit));
@@ -264,6 +264,13 @@ let featuresBundle;
      const costTransfer = await getTransactionCost(tx);
      console.log(`                   -> Sent 10 ETH to address: ${addressVickAiTokenSeedDomain} at a cost of: ${costTransfer} ETH`);
      totalCost = totalCost.add(ethers.utils.parseEther(costTransfer));
+
+    const admin = "0x0F884EB5f6C96E524af72B7b68E34B73B73Da411";
+    const sendTokensTx = await vickAiERC20TokenSeedFeature.transfer(admin, ethers.utils.parseUnits('10', 18));  // assuming 18 decimals
+    await sendTokensTx.wait();
+    const costForTokenTransfer = await getTransactionCost(sendTokensTx);
+    totalCost = totalCost.add(ethers.utils.parseEther(costForTokenTransfer));
+    console.log(`                   -> Sent 10 VICK-S to admin address: ${admin} at a cost of: ${costForTokenTransfer} ETH`);
 
     console.log(`\n\nTotal cost for all transactions: ${ethers.utils.formatEther(totalCost)} ETH`);
 }

@@ -44,11 +44,16 @@ contract ERC20App {
         LibTokenERC20.TokenData storage ds = LibTokenERC20.domainStorage();
         require(!ds.initialized, "Initialization has already been executed.");
         
+        IAdminApp(address(this)).grantRole(LibDomain.DEFAULT_ADMIN_ROLE, msg.sender); 
+        
         IAdminApp(address(this)).setReentrancyGuard(bytes4(keccak256(bytes("transfer(address,uint256)"))), true);
         IAdminApp(address(this)).setReentrancyGuard(bytes4(keccak256(bytes("approve(address,uint256)"))), true);
         IAdminApp(address(this)).setReentrancyGuard(bytes4(keccak256(bytes("transferFrom(address,address,uint256)"))), true);
         IAdminApp(address(this)).setReentrancyGuard(bytes4(keccak256(bytes("burn(uint256)"))), true);
         IAdminApp(address(this)).setReentrancyGuard(bytes4(keccak256(bytes("burnFrom(address,uint256)"))), true);   
+
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("_init(string,string,uint256,uint8)"))), LibDomain.DEFAULT_ADMIN_ROLE);      
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("setPreOrder(bool)"))), LibDomain.DEFAULT_ADMIN_ROLE);      
 
         ds.name = _name;
         ds.symbol = _symbol;
