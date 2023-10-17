@@ -214,14 +214,28 @@ let featuresBundle;
 
     let extensibleFeatures = [...features];
 
-    // Create the "VickAi" subdomain of the "Plugfy" domain
-    const ERC20App = await ethers.getContractFactory('TokenDexApp');
+    const DexApp = await ethers.getContractFactory('DexApp');
+    const dexApp = await DexApp.deploy();
+    await dexApp.deployed();
+    const costForDexApp = await getTransactionCost(dexApp.deployTransaction);
+    totalCost = totalCost.add(ethers.utils.parseEther(costForDexApp));
+
+    const dexAppFunctionSelectors = getSelectors(dexApp);
+
+    const dexAppFeatureArgs = {
+        featureAddress: dexApp.address,
+        action: 0, 
+        functionSelectors: dexAppFunctionSelectors
+    };
+
+    extensibleFeatures.push(dexAppFeatureArgs);
+
+
+    const ERC20App = await ethers.getContractFactory('ERC20App');
     const erc20App = await ERC20App.deploy();
     await erc20App.deployed();
     const costForERC20App = await getTransactionCost(erc20App.deployTransaction);
     totalCost = totalCost.add(ethers.utils.parseEther(costForERC20App));
-
-
 
     extensibleFeatures.push({
         featureAddress: erc20App.address,
@@ -247,7 +261,7 @@ let featuresBundle;
     //     console.log(`                 - Set Reentrancy Guard for function ${functionName} at a cost of: ${costForSetGuard} ETH`);
     // }    
     
-    const vickAiERC20TokenSeedFeature = await ethers.getContractAt('TokenDexApp', addressVickAiTokenSeedDomain);
+    const vickAiERC20TokenSeedFeature = await ethers.getContractAt('ERC20App', addressVickAiTokenSeedDomain);
     const initTx = await vickAiERC20TokenSeedFeature._init("Vick Ai Seed","VICK-S", 2500000000000000000000000n, 18);
     const costForInit = await getTransactionCost(initTx);
     totalCost = totalCost.add(ethers.utils.parseEther(costForInit));
@@ -271,6 +285,31 @@ let featuresBundle;
     const costForTokenTransfer = await getTransactionCost(sendTokensTx);
     totalCost = totalCost.add(ethers.utils.parseEther(costForTokenTransfer));
     console.log(`                   -> Sent 10 VICK-S to admin address: ${admin} at a cost of: ${costForTokenTransfer} ETH`);
+
+
+    console.log(`               -> DexApp feature deployed: ${dexApp.address} at a cost of: ${costForDexApp} ETH`);    
+    const dexAppFeature = await ethers.getContractAt('DexApp', addressVickAiTokenSeedDomain);
+    const gatewayName = "VickAiGateway";
+    const onlyReceiveSwapTokenAddress = ethers.constants.AddressZero; // Defina o endereço adequado aqui.
+    const routers = []; // Defina os roteadores adequados aqui, se houver.
+    const txDex = await dexAppFeature.createGateway(gatewayName, onlyReceiveSwapTokenAddress, routers);
+    const receipt = await txDex.wait();
+    const gatewayId = receipt.events?.find(e => e.event === 'GatewayCreated')?.args?.gatewayId;
+    
+    console.log(`                   -> Gateway ${gatewayName} created with ID: ${gatewayId}`);
+    
+    const totalTokenSupply = await vickAiERC20TokenSeedFeature.balanceOf(owner.address)
+ 
+    const approveTx = await vickAiERC20TokenSeedFeature.approve(addressVickAiTokenSeedDomain, totalTokenSupply);
+    await approveTx.wait();
+    const costForApproval = await getTransactionCost(approveTx);
+    totalCost = totalCost.add(ethers.utils.parseEther(costForApproval));
+    console.log(`                   -> Approved ${totalTokenSupply} VICK-S for DexApp at a cost of: ${costForApproval} ETH`);
+
+    const preOrderPrice = ethers.utils.parseEther("1"); // Defina o preço da pré-venda aqui.
+    await dexAppFeature.createPurchOrder(gatewayId, vickAiERC20TokenSeedFeature.address, true, totalTokenSupply, preOrderPrice, 0); //bytes32 gatewayId, address salesTokenAddress, bool preOrder, uint256 amount, uint256 price, uint256 tokenBurnedOnClose
+    console.log(`                   -> Pre-sale order created for total token supply: ${totalTokenSupply.toString()}`);
+    
 
     console.log(`\n\nTotal cost for all transactions: ${ethers.utils.formatEther(totalCost)} ETH`);
 }
