@@ -315,18 +315,22 @@ let featuresBundle;
 
   const destination = "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4"; // Project Manager Vick AI Initial Funds Contract
 
-  // Simplify the creation of purchase orders with a function
   async function _createPurchOrder(preOrder, amount, price, destination, tokenBurnedOnClose) {
-      await dexAppFeature.createPurchOrder(
-          gatewayId,
-          vickAiERC20TokenSeedFeature.address,
-          preOrder,
-          amount,
-          price,
-          tokenBurnedOnClose
-      );
-      console.log(`                     -> Order created: Amount: ${amount}, Price: ${price}, Burned on close: ${tokenBurnedOnClose}`);
+    const tx = await dexAppFeature.createPurchOrder(
+        gatewayId,
+        vickAiERC20TokenSeedFeature.address,
+        preOrder,
+        amount,
+        price,
+        tokenBurnedOnClose
+    );
+    await tx.wait();
+    const costForOrderCreation = await getTransactionCost(tx);
+    totalCost = totalCost.add(ethers.utils.parseEther(costForOrderCreation));
+    
+    console.log(`                     -> Order created: Amount: ${amount}, Price: ${price}, Burned on close: ${tokenBurnedOnClose}, Cost: ${costForOrderCreation} ETH`);
   }
+
 
   // Create purchase orders based on provided information
   await _createPurchOrder(true, ethers.utils.parseUnits("256800.00", 18), ethers.utils.parseUnits("0.200000", 18), destination, ethers.utils.parseUnits("12840.00", 18));
@@ -335,6 +339,28 @@ let featuresBundle;
   await _createPurchOrder(true, ethers.utils.parseUnits("358291.38", 18), ethers.utils.parseUnits("0.300590", 18), destination, ethers.utils.parseUnits("71658.28", 18));
   await _createPurchOrder(true, ethers.utils.parseUnits("228874.07", 18), ethers.utils.parseUnits("0.392710", 18), destination, ethers.utils.parseUnits("68662.22", 18));
   await _createPurchOrder(true, ethers.utils.parseUnits("266026.95", 18), ethers.utils.parseUnits("0.495810", 18), destination, ethers.utils.parseUnits("106410.78", 18));
+
+
+    // Purchase 1000 Vick-S tokens using ETH from the Admin account
+  const purchaseAmount = ethers.utils.parseUnits('1000', 18); 
+  const requiredETH = purchaseAmount.mul(ethers.utils.parseUnits('0.495810', 18)).div(ethers.utils.parseUnits('1', 18)); // Assuming 0.495810 ETH per Vick-S token from the last purchase order
+
+  //"swapToken(bytes32,address,address,uint256,address,address)": FunctionFragment;
+  // Purchase the tokens
+  const purchaseTx = await dexAppFeature.swapToken1(
+      gatewayId,
+      vickAiERC20TokenSeedFeature.address,
+      "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174", // ETH as the input token
+      requiredETH,
+      admin.address, // tokens will be sent to the admin address
+      ethers.constants.AddressZero // No airdrop
+  );
+  await purchaseTx.wait();
+  const costForPurchase = await getTransactionCost(purchaseTx);
+  totalCost = totalCost.add(costForPurchase);
+
+  const balanceAfter = await ethers.provider.getBalance(admin.address);
+  console.log(`                     -> Admin purchased 1000 Vick-S tokens at a cost of: ${ethers.utils.formatEther(balanceBefore.sub(balanceAfter))} ETH`);
 
     
     //const sendTokensTx2 = await vickAiERC20TokenSeedFeature.connect(admin).transfer(owner.address, ethers.utils.parseUnits('10', 18));  // assuming 18 decimals

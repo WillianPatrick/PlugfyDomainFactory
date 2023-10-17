@@ -104,6 +104,7 @@ contract DexApp  {
         gateway.onlyReceiveSwapTokenAddres = _onlyReceiveSwapTokenAddres;
         gateway.enabled = true;
         gateway.owner = msg.sender;
+        ds.wrappedNativeTokenAddress = address(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270); //wmatc
         for (uint256 i = 0; i < _routers.length; i++) {
             ds.liquidityRouters[gatewayId].push(_routers[i]);
             ds.liquidityRoutersIndex[gatewayId][_routers[i].router] = ds.liquidityRouters[gatewayId].length - 1;
@@ -219,19 +220,19 @@ contract DexApp  {
     }
 
 
-    function swapNativeToken(bytes32 gatewayId, address salesTokenAddress, address airdropOriginAddress) external payable  {
-        this.swapToken(gatewayId, salesTokenAddress, address(0), address(0), msg.value, msg.sender, airdropOriginAddress);
+    function swapNativeToken1(bytes32 gatewayId, address salesTokenAddress, address airdropOriginAddress) external payable  {
+        this.swapToken2(gatewayId, salesTokenAddress, address(0), address(0), msg.value, msg.sender, airdropOriginAddress);
     }   
 
-    function swapNativeToken(bytes32 gatewayId, address salesTokenAddress, address quoteRouter, address airdropOriginAddress) external payable  {
-        this.swapToken(gatewayId, salesTokenAddress, address(0), quoteRouter, msg.value, msg.sender, airdropOriginAddress);
+    function swapNativeToken2(bytes32 gatewayId, address salesTokenAddress, address quoteRouter, address airdropOriginAddress) external payable  {
+        this.swapToken2(gatewayId, salesTokenAddress, address(0), quoteRouter, msg.value, msg.sender, airdropOriginAddress);
     }
 
-    function swapToken(bytes32 gatewayId, address salesTokenAddress, address tokenIn, uint256 amountIn, address toAddress, address airdropOriginAddress) external{
-        this.swapToken(gatewayId, salesTokenAddress, tokenIn, address(0), amountIn, toAddress, airdropOriginAddress);
+    function swapToken1(bytes32 gatewayId, address salesTokenAddress, address tokenIn, uint256 amountIn, address toAddress, address airdropOriginAddress) external {
+        this.swapToken2(gatewayId, salesTokenAddress, tokenIn, address(0), amountIn, toAddress, airdropOriginAddress);
     }
 
-    function swapToken(bytes32 gatewayId, address salesTokenAddress, address tokenIn, address router, uint256 amountIn, address toAddress, address airdropOriginAddress) external payable {
+    function swapToken2(bytes32 gatewayId, address salesTokenAddress, address tokenIn, address router, uint256 amountIn, address toAddress, address airdropOriginAddress) external {
         LibDex.DexStorage storage ds = LibDex.domainStorage();
         LibDex.Gateway storage gateway = ds.gateways[gatewayId];
 
