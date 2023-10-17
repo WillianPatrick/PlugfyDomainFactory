@@ -121,5 +121,11 @@ contract AdminApp is IAdminApp {
     
     function getReentrancyGuard(bytes4 _functionSelector) public view returns(bool) {
         return LibDomain.getReentrancyGuard(_functionSelector);
-    }        
+    }   
+
+    function getRoleHash(string memory name) external pure returns (bytes32) {
+        return keccak256(abi.encodePacked(name));
+    }
+
+
 }

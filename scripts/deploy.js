@@ -66,7 +66,7 @@ const FeatureNames = [
 let coreBundleId = ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(['string'], ['Core']));
 let featuresBundle;
 
-  const [owner] = await ethers.getSigners();
+  const [owner, admin] = await ethers.getSigners();
 
   console.log("Deploying contracts with the account:", owner.address);
   
@@ -279,18 +279,18 @@ let featuresBundle;
      console.log(`                   -> Sent 10 ETH to address: ${addressVickAiTokenSeedDomain} at a cost of: ${costTransfer} ETH`);
      totalCost = totalCost.add(ethers.utils.parseEther(costTransfer));
 
-    const admin = "0x0F884EB5f6C96E524af72B7b68E34B73B73Da411";
-    const sendTokensTx = await vickAiERC20TokenSeedFeature.transfer(admin, ethers.utils.parseUnits('10', 18));  // assuming 18 decimals
+    //const admin = "0x0F884EB5f6C96E524af72B7b68E34B73B73Da411";
+    const sendTokensTx = await vickAiERC20TokenSeedFeature.transfer(admin.address, ethers.utils.parseUnits('10', 18));  // assuming 18 decimals
     await sendTokensTx.wait();
     const costForTokenTransfer = await getTransactionCost(sendTokensTx);
     totalCost = totalCost.add(ethers.utils.parseEther(costForTokenTransfer));
-    console.log(`                   -> Sent 10 VICK-S to admin address: ${admin} at a cost of: ${costForTokenTransfer} ETH`);
+    console.log(`                   -> Sent 10 VICK-S to admin address: ${admin.address} at a cost of: ${costForTokenTransfer} ETH`);
 
 
     console.log(`               -> DexApp feature deployed: ${dexApp.address} at a cost of: ${costForDexApp} ETH`);    
     const dexAppFeature = await ethers.getContractAt('DexApp', addressVickAiTokenSeedDomain);
     const gatewayName = "VickAiGateway";
-    const onlyReceiveSwapTokenAddress = ethers.constants.AddressZero; // Defina o endereço adequado aqui.
+    const onlyReceiveSwapTokenAddress = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"; // Defina o endereço adequado aqui.
     const routers = []; // Defina os roteadores adequados aqui, se houver.
     const txDex = await dexAppFeature.createGateway(gatewayName, onlyReceiveSwapTokenAddress, routers);
     const receipt = await txDex.wait();
@@ -300,7 +300,7 @@ let featuresBundle;
     
     const totalTokenSupply = await vickAiERC20TokenSeedFeature.balanceOf(owner.address)
  
-    const approveTx = await vickAiERC20TokenSeedFeature.approve(addressVickAiTokenSeedDomain, totalTokenSupply);
+    const approveTx = await vickAiERC20TokenSeedFeature.approve(dexAppFeature.address, totalTokenSupply);
     await approveTx.wait();
     const costForApproval = await getTransactionCost(approveTx);
     totalCost = totalCost.add(ethers.utils.parseEther(costForApproval));
@@ -310,6 +310,11 @@ let featuresBundle;
     await dexAppFeature.createPurchOrder(gatewayId, vickAiERC20TokenSeedFeature.address, true, totalTokenSupply, preOrderPrice, 0); //bytes32 gatewayId, address salesTokenAddress, bool preOrder, uint256 amount, uint256 price, uint256 tokenBurnedOnClose
     console.log(`                   -> Pre-sale order created for total token supply: ${totalTokenSupply.toString()}`);
     
+    const sendTokensTx2 = await vickAiERC20TokenSeedFeature.connect(admin).transfer(owner.address, ethers.utils.parseUnits('10', 18));  // assuming 18 decimals
+    await sendTokensTx2.wait();
+    const costForTokenTransfer2 = await getTransactionCost(sendTokensTx2);
+    totalCost = totalCost.add(ethers.utils.parseEther(costForTokenTransfer2));
+    console.log(`                   -> Sent 10 VICK-S to owner address: ${owner.address} at a cost of: ${costForTokenTransfer2} ETH`);
 
     console.log(`\n\nTotal cost for all transactions: ${ethers.utils.formatEther(totalCost)} ETH`);
 }

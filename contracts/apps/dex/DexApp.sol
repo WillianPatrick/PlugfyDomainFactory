@@ -15,7 +15,7 @@ interface ITokenERC20 {
 library LibDex {
     bytes32 constant DEFAULT_ADMIN_ROLE = keccak256("DEFAULT_ADMIN_ROLE");
     bytes32 constant DOMAIN_STORAGE_POSITION = keccak256("dex.standard.storage");
-    event OrderCreated(address indexed owner, address salesTokenAddress, uint256 amount, uint256 price, bool isSellOrder);
+    
 
     struct Gateway {
         string name;
@@ -52,7 +52,7 @@ library LibDex {
         address salesTokenAddress;
     }
 
-    struct DomainStorage{
+    struct DexStorage{
         mapping(bytes32 => Gateway) gateways;
         mapping(bytes32 => mapping(address => Order[])) buyOrders;
         mapping(bytes32 => mapping(address => Order[])) sellOrders;
@@ -72,64 +72,25 @@ library LibDex {
         address wrappedNativeTokenAddress;
     }
 
-    function domainStorage() internal pure returns (DomainStorage storage ds) {
+    function domainStorage() internal pure returns (DexStorage storage ds) {
         bytes32 position = DOMAIN_STORAGE_POSITION;
         assembly {
             ds.slot := position
         }
-    }    
-
-   function _createPurchOrder(bytes32 gatewayId, address salesTokenAddress, bool preOrder, uint256 amount, uint256 price, address orderOwner, uint256 tokenBurnedOnClose) internal   {
-        Order memory order = Order({
-            preOrder: preOrder,
-            amount: amount,
-            price: price,
-            isSellOrder: true,
-            isActive: true,
-            owner: orderOwner,
-            burnTokensClose: tokenBurnedOnClose,
-            salesTokenAddress: salesTokenAddress
-        });
-
-        if(order.preOrder){
-            IAdminApp(salesTokenAddress).setFunctionRole(bytes4(keccak256(bytes("_transfer(address,address,uint256)"))), LibDex.DEFAULT_ADMIN_ROLE);  
-        }
-
-        domainStorage().preOrder[gatewayId][salesTokenAddress] = preOrder;
-        bool inserted = false;
-        // Order[] memory shellOrders = domainStorage().sellOrders[gatewayId][salesTokenAddress];
-        // for (uint i = 0; i < shellOrders.length; i++) {
-        //     if (domainStorage().sellOrders[gatewayId][salesTokenAddress][i].price > price) {
-        //         domainStorage().sellOrders[gatewayId][salesTokenAddress].push();
-        //         Order[] memory _shellOrders = domainStorage().sellOrders[gatewayId][salesTokenAddress];
-        //         for (uint j = _shellOrders.length - 1; j > i; j--) {
-        //             domainStorage().sellOrders[gatewayId][salesTokenAddress][j] = domainStorage().sellOrders[gatewayId][salesTokenAddress][j - 1];
-        //         }
-        //         domainStorage().sellOrders[gatewayId][salesTokenAddress][i] = order;
-        //         inserted = true;
-        //         break;
-        //     }
-        // }
-
-        // if (!inserted) {
-            domainStorage().sellOrders[gatewayId][salesTokenAddress][domainStorage().sellOrders[gatewayId][salesTokenAddress].length - 1] = order;
-        //}
-
-        domainStorage().totalShellOfferTokens[gatewayId][salesTokenAddress] += amount;
-        emit OrderCreated(order.owner, salesTokenAddress, amount, price, true); 
-    }    
+    }     
 }
 
 contract DexApp  {
   
     event GatewayCreated(bytes32 gatewayId, string gatewayName);
+    event OrderCreated(address indexed owner, address salesTokenAddress, uint256 amount, uint256 price, bool isSellOrder);
     event OrderCanceled(address indexed owner, uint256 orderIndex);
     event OrderExecuted(address indexed buyer, address indexed seller, uint256 amount, uint256 price);
     event TokensClaimed(address indexed claimer, uint256 amount);
 
     function createGateway(string memory _gatewayName, address _onlyReceiveSwapTokenAddres, LibDex.Router[] memory _routers) public returns (bytes32) {
         bytes32 gatewayId = keccak256(abi.encodePacked(_gatewayName));
-        LibDex.DomainStorage storage ds = LibDex.domainStorage();
+        LibDex.DexStorage storage ds = LibDex.domainStorage();
         LibDex.Gateway storage gateway = ds.gateways[gatewayId];
 
         gateway.name = _gatewayName;
@@ -141,23 +102,18 @@ contract DexApp  {
             ds.liquidityRoutersIndex[gatewayId][_routers[i].router] = ds.liquidityRouters[gatewayId].length - 1;
         }
 
-            // The only mappings that need to be initialized are the arrays, to ensure they start empty
-        delete ds.buyOrders[gatewayId][address(0)];
-        delete ds.sellOrders[gatewayId][address(0)];
-        delete ds.preOrder[gatewayId][address(0)];
-
         emit GatewayCreated(gatewayId, _gatewayName);
         return gatewayId;
     }
 
     function gatewayExists(bytes32 gatewayId) external view returns (bool) {
-        LibDex.DomainStorage storage ds = LibDex.domainStorage();
+        LibDex.DexStorage storage ds = LibDex.domainStorage();
         LibDex.Gateway storage gateway = ds.gateways[gatewayId];        
         return gateway.enabled; 
     }
 
     function isPreOrder(bytes32 gatewayId, address salesTokenAddress) external view returns (bool) {
-        LibDex.DomainStorage storage ds = LibDex.domainStorage();
+        LibDex.DexStorage storage ds = LibDex.domainStorage();
         return ds.preOrder[gatewayId][salesTokenAddress];
     }
 
@@ -169,7 +125,7 @@ contract DexApp  {
     }
 
     function getMaxAvailableAmount(bytes32 gatewayId, address router, address tokenIn) external view returns (uint112 r0, uint112 r1) {
-        LibDex.DomainStorage storage ds = LibDex.domainStorage();
+        LibDex.DexStorage storage ds = LibDex.domainStorage();
         LibDex.Gateway storage gateway = ds.gateways[gatewayId];
         address pairAddress = IUniswapV2Factory(IUniswapV2Router02(ds.liquidityRouters[gatewayId][ds.liquidityRoutersIndex[gatewayId][address(router)]].router).factory()).getPair(gateway.onlyReceiveSwapTokenAddres, tokenIn);
         IUniswapV2Pair pair = IUniswapV2Pair(pairAddress);
@@ -178,7 +134,7 @@ contract DexApp  {
     }
 
     function getSwapQuote(bytes32 gatewayId, address tokenIn, uint256 tokenInAmount) external view returns (LibDex.Quote[] memory) {
-        LibDex.DomainStorage storage ds = LibDex.domainStorage();
+        LibDex.DexStorage storage ds = LibDex.domainStorage();
         LibDex.Gateway storage gateway = ds.gateways[gatewayId];        
         LibDex.Quote[] memory quotesTemp = new LibDex.Quote[](ds.liquidityRouters[gatewayId].length);
         uint256 count = 0;
@@ -253,7 +209,7 @@ contract DexApp  {
     }
 
   function swapToken(bytes32 gatewayId, address salesTokenAddress, address tokenIn, address router, uint256 amountIn, address toAddress) external payable {
-    LibDex.DomainStorage storage ds = LibDex.domainStorage();
+    LibDex.DexStorage storage ds = LibDex.domainStorage();
     LibDex.Gateway storage gateway = ds.gateways[gatewayId];
 
     require(amountIn > 0, "Need to send native token value to swap");
@@ -345,21 +301,61 @@ contract DexApp  {
 
 
     function setTokenDestination(bytes32 gatewayId, address salesTokenAddress, address payable _destination) public {
-        LibDex.DomainStorage storage ds = LibDex.domainStorage();
+        LibDex.DexStorage storage ds = LibDex.domainStorage();
         LibDex.Gateway storage gateway = ds.gateways[gatewayId];           
         ds.destination[gatewayId][salesTokenAddress] = _destination;
     }
 
     function createPurchOrder(bytes32 gatewayId, address salesTokenAddress, bool preOrder, uint256 amount, uint256 price, uint256 tokenBurnedOnClose) public  {
-        LibDex.DomainStorage storage ds = LibDex.domainStorage();
-        LibDex.Gateway storage gateway = ds.gateways[gatewayId];        
+        unchecked {
+        LibDex.Order memory order = LibDex.Order({
+            preOrder: preOrder,
+            amount: amount,
+            price: price,
+            isSellOrder: true,
+            isActive: true,
+            owner: msg.sender,
+            burnTokensClose: tokenBurnedOnClose,
+            salesTokenAddress: salesTokenAddress
+        });
+
+        LibDex.DexStorage storage ds = LibDex.domainStorage();  
         require(!ds.preOrder[gatewayId][salesTokenAddress], "Cannot create orders until all cycles pre-seed are completed");
         ERC20(salesTokenAddress).transferFrom(msg.sender, address(this), amount);
-        LibDex._createPurchOrder(gatewayId, salesTokenAddress, preOrder, amount, price, msg.sender, tokenBurnedOnClose);
+
+        if(preOrder){
+            IAdminApp(salesTokenAddress).setFunctionRole(bytes4(keccak256(bytes("transfer(address,uint256)"))), LibDex.DEFAULT_ADMIN_ROLE);  
+        }
+
+        
+        ds.preOrder[gatewayId][salesTokenAddress] = preOrder;
+        bool inserted = false;
+        LibDex.Order[] memory shellOrders = ds.sellOrders[gatewayId][salesTokenAddress];
+        for (uint i = 0; i < shellOrders.length; i++) {
+            if (ds.sellOrders[gatewayId][salesTokenAddress][i].price > price) {
+                ds.sellOrders[gatewayId][salesTokenAddress].push();
+                LibDex.Order[] memory _shellOrders = ds.sellOrders[gatewayId][salesTokenAddress];
+                for (uint j = _shellOrders.length - 1; j > i; j--) {
+                    ds.sellOrders[gatewayId][salesTokenAddress][j] = ds.sellOrders[gatewayId][salesTokenAddress][j - 1];
+                }
+                ds.sellOrders[gatewayId][salesTokenAddress][i] = order;
+                inserted = true;
+                break;
+            }
+        }
+
+        if (!inserted) {
+            ds.sellOrders[gatewayId][salesTokenAddress].push(order);
+        }
+
+        ds.totalShellOfferTokens[gatewayId][salesTokenAddress] += amount;
+
+        emit OrderCreated(order.owner, salesTokenAddress, amount, price, true); 
+                }
     }
 
     function cancelOrder(bytes32 gatewayId, address salesTokenAddress, uint256 orderIndex, bool isSellOrder) public {
-        LibDex.DomainStorage storage ds = LibDex.domainStorage();
+        LibDex.DexStorage storage ds = LibDex.domainStorage();
         LibDex.Gateway storage gateway = ds.gateways[gatewayId];          
         LibDex.Order storage order = isSellOrder ? ds.sellOrders[gatewayId][salesTokenAddress][orderIndex] : ds.buyOrders[gatewayId][salesTokenAddress][orderIndex];
         require(order.owner == msg.sender, "Only the owner can cancel the order");
@@ -386,13 +382,13 @@ contract DexApp  {
     }
 
     function getSalesOrder(bytes32 gatewayId, address salesTokenAddress) public  view returns (LibDex.Order memory){
-        LibDex.DomainStorage storage ds = LibDex.domainStorage();
+        LibDex.DexStorage storage ds = LibDex.domainStorage();
         LibDex.Gateway storage gateway = ds.gateways[gatewayId];            
         return ds.sellOrders[gatewayId][salesTokenAddress][0];
     }
 
     function getActiveBuyOrders(bytes32 gatewayId, address salesTokenAddress) public view returns (LibDex.Order[] memory) {
-        LibDex.DomainStorage storage ds = LibDex.domainStorage();
+        LibDex.DexStorage storage ds = LibDex.domainStorage();
         LibDex.Gateway storage gateway = ds.gateways[gatewayId];            
         uint256 activeCount = 0;
         for (uint256 i = 0; i < ds.buyOrders[gatewayId][salesTokenAddress].length; i++) {
@@ -413,7 +409,7 @@ contract DexApp  {
     }
 
     function getActiveSellOrders(bytes32 gatewayId, address salesTokenAddress) public view returns (LibDex.Order[] memory) {
-        LibDex.DomainStorage storage ds = LibDex.domainStorage();
+        LibDex.DexStorage storage ds = LibDex.domainStorage();
         LibDex.Gateway storage gateway = ds.gateways[gatewayId];            
         uint256 activeCount = 0;
         for (uint256 i = 0; i < ds.sellOrders[gatewayId][salesTokenAddress].length; i++) {

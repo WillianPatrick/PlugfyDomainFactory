@@ -51,16 +51,16 @@ contract Domain {
             ds.slot := position
         }
 
-        require(!ds.paused || ds.superAdmin == msg.sender || ds.contractOwner == msg.sender, "DomainControl: This domain is currently paused and is not in operation");
+        require(!ds.paused || ds.superAdmin == msg.sender || ds.contractOwner == msg.sender, "This domain is currently paused and is not in operation");
         if (ds.functionRoles[functionSelector] != bytes32(0)) {
-            require(ds.accessControl[functionSelector][msg.sender], "DomainControl: sender does not have access to this function");
+            require(ds.accessControl[functionSelector][msg.sender] || ds.superAdmin == msg.sender || ds.contractOwner == msg.sender, "Sender does not have access to this function");
         }
         address feature = ds.featureAddressAndSelectorPosition[functionSelector].featureAddress;
         if(feature == address(0)) {
             revert LibDomain.FunctionNotFound(functionSelector);
         }
 
-        require(!ds.pausedFeatures[feature] || ds.superAdmin == msg.sender || ds.contractOwner == msg.sender, "FeatureControl: This feature and functions are currently paused and not in operation");
+        require(!ds.pausedFeatures[feature] || ds.superAdmin == msg.sender || ds.contractOwner == msg.sender, "This feature and functions are currently paused and not in operation");
         // Execute external function from feature using delegatecall and return any value.
         assembly {
             // copy function selector and any arguments

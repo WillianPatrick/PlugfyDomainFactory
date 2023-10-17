@@ -22,7 +22,7 @@ const config: HardhatUserConfig = {
   networks: {
     buildbear: {
       url: `https://rpc.buildbear.io/fuzzy-jek-tono-porkins-c6f23a4b`,
-      accounts: [process.env.PRIVATE_KEY],  
+      accounts: [process.env.PRIVATE_KEYOWNER,process.env.PRIVATE_KEYADMIN],  
       gasPrice: 20000000000,  
     }    
   }
