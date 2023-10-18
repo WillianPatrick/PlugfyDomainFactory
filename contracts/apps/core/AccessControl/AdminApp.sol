@@ -115,9 +115,12 @@ contract AdminApp is IAdminApp {
         }
     }     
 
-    function getRoleHash(string memory name) external pure returns (bytes32) {
-        return keccak256(abi.encodePacked(name));
+    function getRoleHash32(string memory str) external pure returns (bytes32) {
+        return keccak256(abi.encodePacked(str));
     }
 
+    function getRoleHash4(string memory str) external pure returns (bytes4) {
+        return bytes4(keccak256(abi.encodePacked(str)));
+    }
 
 }

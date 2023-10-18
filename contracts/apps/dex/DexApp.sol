@@ -5,6 +5,7 @@ import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { IAdminApp } from "../core/AccessControl/IAdminApp.sol";
+import { ReentrancyGuardApp } from "../core/AccessControl/ReentrancyGuardApp.sol";
 
 interface ITokenERC20 {
     function deposit() external payable;
@@ -77,6 +78,7 @@ library LibDex {
         mapping(bytes32 => Router[]) liquidityRouters;
         mapping(bytes32 => mapping(address => uint256)) liquidityRoutersIndex;       
         address wrappedNativeTokenAddress;
+        bool initialized;
     }
 
     function domainStorage() internal pure returns (DexStorage storage ds) {
@@ -94,6 +96,27 @@ contract DexApp  {
     event OrderCanceled(address indexed owner, uint256 orderIndex);
     event OrderExecuted(address indexed buyer, address indexed seller, uint256 amount, uint256 price);
     event TokensClaimed(address indexed claimer, uint256 amount);
+
+    function _init() public {
+        LibDex.DexStorage storage ds = LibDex.domainStorage();
+        require(!ds.initialized, "Initialization has already been executed.");
+
+        IAdminApp(address(this)).grantRole(LibDex.DEFAULT_ADMIN_ROLE, msg.sender);
+
+        // Protecting the contract's functions from reentrancy attacks
+        ReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("swapNativeToken(bytes32,address,address)"))), true);
+        ReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("swapNativeTokenWithRouter(bytes32,address,address,address)"))), true);
+        ReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("swapToken(bytes32,address,address,uint256,address,address)"))), true);
+        ReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("swapTokenWithRouter(bytes32,address,address,address,uint256,address,address)"))), true);
+        ReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("createPurchOrder(bytes32,address,bool,uint256,uint256,uint256)"))), true);
+        ReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("cancelOrder(bytes32,address,uint256,bool)"))), true);
+
+        // Setting up roles for specific functions
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("_init()"))), LibDex.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("createGateway(string,address,LibDex.Router[])"))), LibDex.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("setTokenDestination(bytes32,address,address)"))), LibDex.DEFAULT_ADMIN_ROLE);
+        ds.initialized = true;
+    }
 
     function createGateway(string memory _gatewayName, address _onlyReceiveSwapTokenAddres, LibDex.Router[] memory _routers) public returns (bytes32) {
         bytes32 gatewayId = keccak256(abi.encodePacked(_gatewayName));
@@ -220,19 +243,19 @@ contract DexApp  {
     }
 
 
-    function swapNativeToken1(bytes32 gatewayId, address salesTokenAddress, address airdropOriginAddress) external payable  {
-        this.swapToken2(gatewayId, salesTokenAddress, address(0), address(0), msg.value, msg.sender, airdropOriginAddress);
+    function swapNativeToken(bytes32 gatewayId, address salesTokenAddress, address airdropOriginAddress) external payable  {
+        this.swapTokenWithRouter(gatewayId, salesTokenAddress, address(0), address(0), msg.value, msg.sender, airdropOriginAddress);
     }   
 
-    function swapNativeToken2(bytes32 gatewayId, address salesTokenAddress, address quoteRouter, address airdropOriginAddress) external payable  {
-        this.swapToken2(gatewayId, salesTokenAddress, address(0), quoteRouter, msg.value, msg.sender, airdropOriginAddress);
+    function swapNativeTokenWithRouter(bytes32 gatewayId, address salesTokenAddress, address quoteRouter, address airdropOriginAddress) external payable  {
+        this.swapTokenWithRouter(gatewayId, salesTokenAddress, address(0), quoteRouter, msg.value, msg.sender, airdropOriginAddress);
     }
 
-    function swapToken1(bytes32 gatewayId, address salesTokenAddress, address tokenIn, uint256 amountIn, address toAddress, address airdropOriginAddress) external {
-        this.swapToken2(gatewayId, salesTokenAddress, tokenIn, address(0), amountIn, toAddress, airdropOriginAddress);
+    function swapToken(bytes32 gatewayId, address salesTokenAddress, address tokenIn, uint256 amountIn, address toAddress, address airdropOriginAddress) external {
+        this.swapTokenWithRouter(gatewayId, salesTokenAddress, tokenIn, address(0), amountIn, toAddress, airdropOriginAddress);
     }
 
-    function swapToken2(bytes32 gatewayId, address salesTokenAddress, address tokenIn, address router, uint256 amountIn, address toAddress, address airdropOriginAddress) external {
+    function swapTokenWithRouter(bytes32 gatewayId, address salesTokenAddress, address tokenIn, address router, uint256 amountIn, address toAddress, address airdropOriginAddress) external {
         LibDex.DexStorage storage ds = LibDex.domainStorage();
         LibDex.Gateway storage gateway = ds.gateways[gatewayId];
 

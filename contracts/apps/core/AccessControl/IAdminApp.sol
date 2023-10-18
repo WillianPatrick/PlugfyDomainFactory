@@ -11,7 +11,8 @@ interface IAdminApp {
 
     function grantRole(bytes32 role, address account) external;
 
-    function getRoleHash(string memory name) external pure returns (bytes32);
+    function getRoleHash32(string memory str) external pure returns (bytes32);
+    function getRoleHash4(string memory str) external pure returns (bytes4);
     function revokeRole(bytes32 role, address account) external;
 
     function renounceRole(bytes32 role) external;
