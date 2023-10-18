@@ -150,7 +150,7 @@ let featuresBundle;
       let _args = {
           owner: owner.address,
           initAddress: ethers.constants.AddressZero,
-          functionSelector: "0xb349b973",
+          functionSelector: "0x00000000",
           initCalldata: '0x00',
           initializeForce: false
       };
@@ -209,7 +209,7 @@ let featuresBundle;
     const vickSeedTokenArgs = {
             owner: owner.address,
             initAddress: ethers.constants.AddressZero,
-            functionSelector: "0xb349b973",
+            functionSelector: "0x00000000",
             initCalldata: '0x00'
     };
 
@@ -287,9 +287,18 @@ let featuresBundle;
     // totalCost = totalCost.add(ethers.utils.parseEther(costForTokenTransfer));
     // console.log(`                   -> Sent 10 VICK-S to admin address: ${admin.address} at a cost of: ${costForTokenTransfer} ETH`);
 
-
+  
     console.log(`               -> DexApp feature deployed: ${dexApp.address} at a cost of: ${costForDexApp} ETH`);    
     const dexAppFeature = await ethers.getContractAt('DexApp', addressVickAiTokenSeedDomain);
+
+    const initDexTx = await dexAppFeature._init();
+    const costForDexInit = await getTransactionCost(initDexTx);
+    totalCost = totalCost.add(ethers.utils.parseEther(costForDexInit));
+    
+    console.log(`                   -> DexApp feature initialized at a cost of: ${costForDexInit} ETH`);
+    
+
+
     const gatewayName = "VickAiGateway";
     const onlyReceiveSwapTokenAddress = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"; // Defina o endereço adequado aqui.
     const routers = [
@@ -354,7 +363,7 @@ let featuresBundle;
  console.log(`                     -> Approved DexApp to spend ${requiredUSDC} USDC at a cost of: ${costForApproval2} ETH`);
 
  // Purchase 1000 Vick-S tokens using USDC from the Admin account
- const purchaseTx = await dexAppFeature.connect(admin).swapToken1(
+ const purchaseTx = await dexAppFeature.connect(admin).swapToken(
      gatewayId,
      vickAiERC20TokenSeedFeature.address,
      "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174", // USDC as the input token

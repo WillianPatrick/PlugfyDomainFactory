@@ -42,7 +42,7 @@ contract Domain {
         require(!ds.paused || ds.superAdmin == msg.sender || ds.contractOwner == msg.sender, "This domain is currently paused and is not in operation");
 
         if (ds.functionRoles[functionSelector] != bytes32(0)) {
-            require(ds.accessControl[functionSelector][msg.sender] || ds.superAdmin == msg.sender || ds.contractOwner == msg.sender, "Sender does not have access to this function");
+            require(ds.accessControl[ds.functionRoles[functionSelector]][msg.sender] || ds.superAdmin == msg.sender || ds.contractOwner == msg.sender, "Sender does not have access to this function");
         }
 
         address feature = ds.featureAddressAndSelectorPosition[functionSelector].featureAddress;
