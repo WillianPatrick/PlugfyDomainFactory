@@ -5,7 +5,7 @@ import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { IAdminApp } from "../core/AccessControl/IAdminApp.sol";
-import { ReentrancyGuardApp } from "../core/AccessControl/ReentrancyGuardApp.sol";
+import { IReentrancyGuardApp } from "../core/AccessControl/IReentrancyGuardApp.sol";
 
 interface ITokenERC20 {
     function deposit() external payable;
@@ -104,12 +104,12 @@ contract DexApp  {
         IAdminApp(address(this)).grantRole(LibDex.DEFAULT_ADMIN_ROLE, msg.sender);
 
         // Protecting the contract's functions from reentrancy attacks
-        ReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("swapNativeToken(bytes32,address,address)"))), true);
-        ReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("swapNativeTokenWithRouter(bytes32,address,address,address)"))), true);
-        ReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("swapToken(bytes32,address,address,uint256,address,address)"))), true);
-        ReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("swapTokenWithRouter(bytes32,address,address,address,uint256,address,address)"))), true);
-        ReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("createPurchOrder(bytes32,address,bool,uint256,uint256,uint256)"))), true);
-        ReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("cancelOrder(bytes32,address,uint256,bool)"))), true);
+        IReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("swapNativeToken(bytes32,address,address)"))), true);
+        IReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("swapNativeTokenWithRouter(bytes32,address,address,address)"))), true);
+        IReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("swapToken(bytes32,address,address,uint256,address,address)"))), true);
+        IReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("swapTokenWithRouter(bytes32,address,address,address,uint256,address,address)"))), true);
+        IReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("createPurchOrder(bytes32,address,bool,uint256,uint256,uint256)"))), true);
+        IReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("cancelOrder(bytes32,address,uint256,bool)"))), true);
 
         // Setting up roles for specific functions
         IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("_init()"))), LibDex.DEFAULT_ADMIN_ROLE);

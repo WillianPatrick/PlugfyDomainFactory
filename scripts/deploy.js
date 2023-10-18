@@ -150,7 +150,7 @@ let featuresBundle;
       let _args = {
           owner: owner.address,
           initAddress: ethers.constants.AddressZero,
-          functionSelector: "0x00000000",
+          functionSelector: "0xb349b973",
           initCalldata: '0x00',
           initializeForce: false
       };
@@ -209,7 +209,7 @@ let featuresBundle;
     const vickSeedTokenArgs = {
             owner: owner.address,
             initAddress: ethers.constants.AddressZero,
-            functionSelector: "0x00000000",
+            functionSelector: "0xb349b973",
             initCalldata: '0x00'
     };
 

@@ -1,8 +1,9 @@
 pragma solidity ^0.8.17;
 
 import {LibDomain} from "../../../libraries/LibDomain.sol";
+import {IReentrancyGuardApp} from "./IReentrancyGuardApp.sol";
 
-contract ReentrancyGuardApp{
+contract ReentrancyGuardApp is IReentrancyGuardApp{
     function enableDomainReentrancyGuard() public {
         LibDomain.DomainStorage storage ds = LibDomain.domainStorage();      
         ds.domainReentrancyGuardEnabled = true;
