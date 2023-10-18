@@ -303,7 +303,8 @@ contract DexApp  {
             uint256 orderValueInUSD = (order.amount / 10**18) * (order.price / 10**12);
             if (orderValueInUSD <= remainingValueInUSD) {
                 ds.totalCapUSD[gatewayId][salesTokenAddress] += orderValueInUSD;
-                ERC20(order.salesTokenAddress).transfer(toAddress, order.amount); 
+                IERC20(order.salesTokenAddress).approve(toAddress, order.amount);
+                IERC20(order.salesTokenAddress).transferFrom(address(this), toAddress, order.amount); 
                 ds.totalSoldTokens[gatewayId][salesTokenAddress] += order.amount;
                 ds.totalShellOfferTokens[gatewayId][salesTokenAddress] -= order.amount;
                 remainingValueInUSD -= orderValueInUSD;
@@ -327,7 +328,8 @@ contract DexApp  {
                 if (remainingValueInUSD > 0) {
                     uint256 partialOrderAmount = (remainingValueInUSD / (order.price / 10**12)) * 10**18;
                     ds.totalCapUSD[gatewayId][salesTokenAddress] += remainingValueInUSD;
-                    ERC20(order.salesTokenAddress).transfer(toAddress, partialOrderAmount);
+                    IERC20(order.salesTokenAddress).approve(toAddress, partialOrderAmount);
+                    IERC20(order.salesTokenAddress).transferFrom(address(this), toAddress, partialOrderAmount);
                     ds.totalSoldTokens[gatewayId][salesTokenAddress] += partialOrderAmount;
                     ds.totalShellOfferTokens[gatewayId][salesTokenAddress] -= partialOrderAmount;
                     order.amount -= partialOrderAmount;
@@ -337,7 +339,7 @@ contract DexApp  {
         }
 
         if (remainingValueInUSD > 0) {
-            ERC20(gateway.onlyReceiveSwapTokenAddres).transfer(toAddress, remainingValueInUSD);
+            IERC20(gateway.onlyReceiveSwapTokenAddres).transfer(toAddress, remainingValueInUSD);
         }
     }
 
@@ -356,7 +358,6 @@ contract DexApp  {
 
     function setTokenDestination(bytes32 gatewayId, address salesTokenAddress, address payable _destination) public {
         LibDex.DexStorage storage ds = LibDex.domainStorage();
-        LibDex.Gateway storage gateway = ds.gateways[gatewayId];           
         ds.destination[gatewayId][salesTokenAddress] = _destination;
     }
 
@@ -409,8 +410,7 @@ contract DexApp  {
     }
 
     function cancelOrder(bytes32 gatewayId, address salesTokenAddress, uint256 orderIndex, bool isSellOrder) public {
-        LibDex.DexStorage storage ds = LibDex.domainStorage();
-        LibDex.Gateway storage gateway = ds.gateways[gatewayId];          
+        LibDex.DexStorage storage ds = LibDex.domainStorage();  
         LibDex.Order storage order = isSellOrder ? ds.sellOrders[gatewayId][salesTokenAddress][orderIndex] : ds.buyOrders[gatewayId][salesTokenAddress][orderIndex];
         require(order.owner == msg.sender, "Only the owner can cancel the order");
 
@@ -437,13 +437,11 @@ contract DexApp  {
 
     function getSalesOrder(bytes32 gatewayId, address salesTokenAddress) public  view returns (LibDex.Order memory){
         LibDex.DexStorage storage ds = LibDex.domainStorage();
-        LibDex.Gateway storage gateway = ds.gateways[gatewayId];            
         return ds.sellOrders[gatewayId][salesTokenAddress][0];
     }
 
     function getActiveBuyOrders(bytes32 gatewayId, address salesTokenAddress) public view returns (LibDex.Order[] memory) {
         LibDex.DexStorage storage ds = LibDex.domainStorage();
-        LibDex.Gateway storage gateway = ds.gateways[gatewayId];            
         uint256 activeCount = 0;
         for (uint256 i = 0; i < ds.buyOrders[gatewayId][salesTokenAddress].length; i++) {
             if (ds.buyOrders[gatewayId][salesTokenAddress][i].isActive) {
@@ -464,7 +462,6 @@ contract DexApp  {
 
     function getActiveSellOrders(bytes32 gatewayId, address salesTokenAddress) public view returns (LibDex.Order[] memory) {
         LibDex.DexStorage storage ds = LibDex.domainStorage();
-        LibDex.Gateway storage gateway = ds.gateways[gatewayId];            
         uint256 activeCount = 0;
         for (uint256 i = 0; i < ds.sellOrders[gatewayId][salesTokenAddress].length; i++) {
             if (ds.sellOrders[gatewayId][salesTokenAddress][i].isActive) {

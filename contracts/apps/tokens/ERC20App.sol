@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 import { IAdminApp } from "../core/AccessControl/IAdminApp.sol";
+import { ReentrancyGuardApp } from "../core/AccessControl/ReentrancyGuardApp.sol";
 
 error NotTokenAdmin();
 
@@ -45,11 +46,11 @@ contract ERC20App {
         
         IAdminApp(address(this)).grantRole(LibTokenERC20.DEFAULT_ADMIN_ROLE, msg.sender); 
 
-        IAdminApp(address(this)).setReentrancyGuard(bytes4(keccak256(bytes("transfer(address,uint256)"))), true);
-        IAdminApp(address(this)).setReentrancyGuard(bytes4(keccak256(bytes("approve(address,uint256)"))), true);
-        IAdminApp(address(this)).setReentrancyGuard(bytes4(keccak256(bytes("transferFrom(address,address,uint256)"))), true);
-        IAdminApp(address(this)).setReentrancyGuard(bytes4(keccak256(bytes("burn(uint256)"))), true);
-        IAdminApp(address(this)).setReentrancyGuard(bytes4(keccak256(bytes("burnFrom(address,uint256)"))), true);   
+        ReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("transfer(address,uint256)"))), true);
+        ReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("approve(address,uint256)"))), true);
+        ReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("transferFrom(address,address,uint256)"))), true);
+        ReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("burn(uint256)"))), true);
+        ReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("burnFrom(address,uint256)"))), true);   
 
         IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("_init(string,string,uint256,uint8)"))), LibTokenERC20.DEFAULT_ADMIN_ROLE);       
 
@@ -99,13 +100,15 @@ contract ERC20App {
     function transferFrom(address sender, address recipient, uint256 amount) public virtual  returns (bool) {
         LibTokenERC20.TokenData storage ds = LibTokenERC20.domainStorage();
         uint256 currentAllowance = ds.allowances[sender][recipient];
-        require(currentAllowance >= amount, "transfer amount exceeds allowance");
+        require(currentAllowance >= amount || msg.sender == sender, "transfer amount exceeds allowance");
         _transfer(sender, recipient, amount);
-        _approve(sender, msg.sender, currentAllowance - amount);
+        if(currentAllowance >= amount || msg.sender != sender){
+            _approve(sender, msg.sender, currentAllowance - amount);
+        }
         return true;
     }
 
-    function _transfer(address sender, address recipient, uint256 amount) public virtual {
+    function _transfer(address sender, address recipient, uint256 amount) internal virtual {
         require(sender != address(0), "transfer from the zero address");
         require(recipient != address(0), "transfer to the zero address");
         require(amount > 0, "Transfer amount must be greater than zero");

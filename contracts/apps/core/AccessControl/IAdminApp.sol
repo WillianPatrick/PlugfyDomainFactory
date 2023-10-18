@@ -32,7 +32,4 @@ interface IAdminApp {
 
     function unpauseFeatures(address[] memory _featureAddress) external;
 
-    function setReentrancyGuard(bytes4 _functionSelector, bool _enabled) external;
-    
-    function getReentrancyGuard(bytes4 _functionSelector) external view returns(bool);
 }

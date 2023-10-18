@@ -56,8 +56,12 @@ library LibDomain {
         mapping(bytes4 => bytes32) functionRoles;
         mapping(bytes32 => mapping(bytes32 => bytes32)) roles;
         bool paused;
-        bool notEntered;
-        mapping(bytes4 => bool) selectorsReentrancyGuard;
+        bool domainReentrancyGuardEnabled;
+        bool domainGlobalReentrancyGuardLock; 
+        mapping(bytes32 => bool) featuresReentrancyGuardEnabled; 
+        mapping(bytes32 => bool) featuresReentrancyGuardLook;        
+        mapping(bytes4 => bool) functionsReentrancyGuardEnabled; 
+        mapping(bytes4 => bool) functionsReentrancyGuardLook; 
     }
 
     function enforceIsTokenSuperAdmin() internal view {
@@ -76,15 +80,6 @@ library LibDomain {
         domainStorage().accessControl[PAUSER_ROLE][previousAdmin] = false;    
         emit AdminshipTransferred(previousAdmin, _newAdmin);
     }
-
-    function setReentrancyGuard(bytes4 _functionSelector, bool _enabled) internal {
-        enforceIsContractOwnerAdmin();
-        domainStorage().selectorsReentrancyGuard[_functionSelector] = _enabled;
-    }
-
-    function getReentrancyGuard(bytes4 _functionSelector) internal view returns(bool) {
-        return domainStorage().selectorsReentrancyGuard[_functionSelector];
-    }   
 
     function domainStorage() internal pure returns (DomainStorage storage ds) {
         bytes32 position = DOMAIN_STORAGE_POSITION;
@@ -131,7 +126,6 @@ library LibDomain {
             revert NotContractOwner(msg.sender, domainStorage().contractOwner);
         }        
     }     
-
     function featureManager(
         IFeatureManager.Feature[] memory _features,
         address _initAddress,
