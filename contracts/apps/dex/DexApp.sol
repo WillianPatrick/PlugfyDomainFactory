@@ -115,7 +115,7 @@ contract DexApp  {
         ds.initialized = true;
         LibDomain.DomainStorage storage dsDomain = LibDomain.domainStorage();
         address feature = dsDomain.featureAddressAndSelectorPosition[bytes4(keccak256(bytes("_initDex()")))].featureAddress;
-        IReentrancyGuardApp(address(this)).enableDisabledFeatureReentrancyGuard(feature, true);
+        IReentrancyGuardApp(address(this)).enableDisabledDomainReentrancyGuard(true);
     }
 
     function createGateway(string memory _gatewayName, address _onlyReceiveSwapTokenAddres, LibDex.Router[] memory _routers) public returns (bytes32) {
