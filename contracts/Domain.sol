@@ -13,6 +13,7 @@ struct DomainArgs {
 }
 
 contract Domain {
+    error ReentrancyGuardLock(uint256 domainLocks, uint256 featureLocks);
     constructor(address _parentDomain, string memory _domainName, IFeatureManager.Feature[] memory _featureManager, DomainArgs memory _args) {
         LibDomain.setContractOwner(_args.owner);
         LibDomain.setSuperAdmin(address(msg.sender));
@@ -59,7 +60,7 @@ contract Domain {
         bytes32 domainGuardLock = keccak256(abi.encodePacked("domainGlobalReentrancyGuardLock"));
         bytes32 featureGuardLock = keccak256(abi.encodePacked(feature, "featuresReentrancyGuardLock"));
         bytes32 functionGuardLock = keccak256(abi.encodePacked(functionSelector, "functionsReentrancyGuardLock"));
-
+        bytes4 errorSelector = Domain.ReentrancyGuardLock.selector;
         assembly {
             let isDomainReentrancyGuardEnabled := sload(add(ds.slot, domainGuardKey))
             let isFeatureReentrancyGuardEnabled := sload(add(ds.slot, featureGuardKey))
@@ -68,8 +69,12 @@ contract Domain {
             let shouldLock := or(or(isDomainReentrancyGuardEnabled, isFeatureReentrancyGuardEnabled), isFunctionReentrancyGuardEnabled)
 
             if shouldLock {
-                if or(or(eq(sload(add(ds.slot, domainGuardLock)), 0), eq(sload(add(ds.slot, featureGuardLock)), 0)), eq(sload(add(ds.slot, functionGuardLock)), 0)) {
-                    revert(0, returndatasize())
+                if or(or(iszero(eq(sload(add(ds.slot, domainGuardLock)), 0)), iszero(eq(sload(add(ds.slot, featureGuardLock)), 0))), iszero(eq(sload(add(ds.slot, functionGuardLock)), 0))){
+                    let ptr := mload(0x40)
+                    mstore(ptr, errorSelector)
+                    mstore(add(ptr, 0x04), sload(add(ds.slot, domainGuardLock)))
+                    mstore(add(ptr, 0x24), sload(add(ds.slot, featureGuardLock)))
+                    revert(ptr, 0x44)
                 }
 
                 sstore(add(ds.slot, domainGuardLock), add(sload(add(ds.slot, domainGuardLock)), 1))
