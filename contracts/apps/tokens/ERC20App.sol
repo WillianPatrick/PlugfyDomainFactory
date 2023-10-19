@@ -58,8 +58,8 @@ contract ERC20App {
         ds.balances[msg.sender] = _totalSupply;
         ds.totalSupply = _totalSupply;
 
-        LibDomain.DomainStorage storage dsDomain = LibDomain.domainStorage();
-        address feature = dsDomain.featureAddressAndSelectorPosition[bytes4(keccak256(bytes("_initERC20(string,string,uint256,uint8)")))].featureAddress;
+        //LibDomain.DomainStorage storage dsDomain = LibDomain.domainStorage();
+        //address feature = dsDomain.featureAddressAndSelectorPosition[bytes4(keccak256(bytes("_initERC20(string,string,uint256,uint8)")))].featureAddress;
         //IReentrancyGuardApp(address(this)).enableDisabledFeatureReentrancyGuard(feature, true);        
         ds.initialized = true;
      

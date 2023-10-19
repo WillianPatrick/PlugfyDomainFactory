@@ -56,12 +56,6 @@ library LibDomain {
         mapping(bytes4 => bytes32) functionRoles;
         mapping(bytes32 => mapping(bytes32 => bytes32)) roles;
         bool paused;
-        uint domainReentrancyGuardEnabled;
-        mapping(bytes32 => uint) featuresReentrancyGuardEnabled; 
-        mapping(bytes4 => uint) functionsReentrancyGuardEnabled;        
-        uint256 domainGlobalReentrancyGuardLock;         
-        mapping(bytes32 => uint256) featuresReentrancyGuardLook;        
-        mapping(bytes4 => uint256) functionsReentrancyGuardLook; 
     }
 
     function enforceIsTokenSuperAdmin() internal view {

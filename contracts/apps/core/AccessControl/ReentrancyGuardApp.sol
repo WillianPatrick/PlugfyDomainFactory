@@ -1,71 +1,108 @@
 pragma solidity ^0.8.17;
 
-import {LibDomain} from "../../../libraries/LibDomain.sol";
-import {IReentrancyGuardApp} from "./IReentrancyGuardApp.sol";
-
+import { LibDomain } from "../../../libraries/LibDomain.sol";
+import { IReentrancyGuardApp } from "./IReentrancyGuardApp.sol";
+import { IAdminApp } from "./IAdminApp.sol";
 
 contract ReentrancyGuardApp is IReentrancyGuardApp{
 
+    function _initReentrancyGuard() public {
+        //LibDomain.DomainStorage storage ds = LibDomain.domainStorage();
+        //require(!ds.initialized, "Initialization has already been executed.");
+
+        // Setting up roles for specific functions
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("_initReentrancyGuard()"))), LibDomain.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("enableDisabledDomainReentrancyGuard(bool)"))), LibDomain.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("enableDisabledFeatureReentrancyGuard(address,bool)"))), LibDomain.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("enableDisabledFunctionReentrancyGuard(bytes4,bool)"))), LibDomain.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("enableDisabledSenderReentrancyGuard(bool)"))), LibDomain.DEFAULT_ADMIN_ROLE);
+
+        // Protecting the contract's functions from reentrancy attacks
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("enableDisabledDomainReentrancyGuard(bool)"))), true);
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("enableDisabledFeatureReentrancyGuard(address,bool)"))), true);
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("enableDisabledFunctionReentrancyGuard(bytes4,bool)"))), true);
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("enableDisabledSenderReentrancyGuard(bool)"))), true);
+
+        //ds.initialized = true;
+    }
+
+
     function enableDisabledDomainReentrancyGuard(bool status) public {
-        bytes32 domainGuardKey = keccak256(abi.encodePacked("domainGlobalReentrancyGuardEnabled"));
-        bytes32 domainGuardLock = keccak256(abi.encodePacked("domainGlobalReentrancyGuardLock"));        
+        bytes32 flagKey = keccak256(abi.encodePacked("domainGlobalReentrancyGuardEnabled"));
+        bytes32 flagLock = keccak256(abi.encodePacked("domainGlobalReentrancyGuardLock"));        
         LibDomain.DomainStorage storage ds = LibDomain.domainStorage();
         assembly {
-                sstore(add(ds.slot, domainGuardKey), status)
-                sstore(add(ds.slot, domainGuardLock), 0)
+                sstore(add(ds.slot, flagKey), status)
+                sstore(add(ds.slot, flagLock), 0)
         }          
     }
 
     function enableDisabledFeatureReentrancyGuard(address feature, bool status) public {
-        bytes32 featureGuardKey = keccak256(abi.encodePacked(feature, "featuresReentrancyGuardEnabled"));
-        bytes32 featureGuardLock = keccak256(abi.encodePacked(feature, "featuresReentrancyGuardLock"));
+        bytes32 flagKey = keccak256(abi.encodePacked(feature, "featuresReentrancyGuardEnabled"));
+        bytes32 flagLock = keccak256(abi.encodePacked(feature, "featuresReentrancyGuardLock"));
         LibDomain.DomainStorage storage ds = LibDomain.domainStorage();
         assembly {
-                sstore(add(ds.slot, featureGuardKey), status)
-                sstore(add(ds.slot, featureGuardLock), 0)
+                sstore(add(ds.slot, flagKey), status)
+                sstore(add(ds.slot, flagLock), 0)
         }         
     }
 
     function enableDisabledFunctionReentrancyGuard(bytes4 functionSelector, bool status) public {
-        bytes32 functionGuardKey = keccak256(abi.encodePacked(functionSelector, "functionsReentrancyGuardEnabled"));
-        bytes32 functionGuardLock = keccak256(abi.encodePacked(functionSelector, "functionsReentrancyGuardLock"));
+        bytes32 flagKey = keccak256(abi.encodePacked(functionSelector, "functionsReentrancyGuardEnabled"));
+        bytes32 flagLock = keccak256(abi.encodePacked(functionSelector, "functionsReentrancyGuardLock"));
         LibDomain.DomainStorage storage ds = LibDomain.domainStorage();
         assembly {
-                sstore(add(ds.slot, functionGuardKey), status)
-                sstore(add(ds.slot, functionGuardLock), 0)
+                sstore(add(ds.slot, flagKey), status)
+                sstore(add(ds.slot, flagLock), 0)
         }         
     }
 
+    function enableDisabledSenderReentrancyGuard(bool status) public {
+        bytes32 flagKey = keccak256(abi.encodePacked("senderReentrancyGuardEnabled"));
+        LibDomain.DomainStorage storage ds = LibDomain.domainStorage();
+        assembly {
+                sstore(add(ds.slot, flagKey), status)
+        }         
+    }
    
     function isDomainReentrancyGuardEnabled() public view returns (bool) {
-        bytes32 domainGuardKey = keccak256(abi.encodePacked("domainGlobalReentrancyGuardEnabled")); 
-        return bytesToBool(getPostionValue(domainGuardKey));
+        bytes32 flagKey = keccak256(abi.encodePacked("domainGlobalReentrancyGuardEnabled")); 
+        return bytesToBool(getPostionValue(flagKey));
     }
 
     function isFeatureReentrancyGuardEnabled(address feature) public view returns (bool) {
-        bytes32 featureGuardKey = keccak256(abi.encodePacked(feature, "featuresReentrancyGuardEnabled"));      
-        return bytesToBool(getPostionValue(featureGuardKey));
+        bytes32 flagKey = keccak256(abi.encodePacked(feature, "featuresReentrancyGuardEnabled"));      
+        return bytesToBool(getPostionValue(flagKey));
     }
 
     function isFunctionReentrancyGuardEnabled(bytes4 functionSelector) public view returns (bool) {
-        bytes32 functionGuardKey = keccak256(abi.encodePacked(functionSelector, "functionsReentrancyGuardEnabled"));       
-        return bytesToBool(getPostionValue(functionGuardKey));
+        bytes32 flagKey = keccak256(abi.encodePacked(functionSelector, "functionsReentrancyGuardEnabled"));       
+        return bytesToBool(getPostionValue(flagKey));
     }
 
+    function isSenderReentrancyGuardEnabled() public view returns (bool) {
+        bytes32 flagKey = keccak256(abi.encodePacked("senderReentrancyGuardEnabled"));       
+        return bytesToBool(getPostionValue(flagKey));
+    }
 
     function getDomainLock() public view returns (uint256) {
-        bytes32 domainGuardLock = keccak256(abi.encodePacked("domainGlobalReentrancyGuardLock"));
-        return bytesToUint256(getPostionValue(domainGuardLock));
+        bytes32 flagLock = keccak256(abi.encodePacked("domainGlobalReentrancyGuardLock"));
+        return bytesToUint256(getPostionValue(flagLock));
     }
 
     function getFeatureLock(address feature) public view returns (uint256) {
-        bytes32 featureGuardLock = keccak256(abi.encodePacked(feature, "featuresReentrancyGuardLock"));
-        return bytesToUint256(getPostionValue(featureGuardLock));
+        bytes32 flagLock = keccak256(abi.encodePacked(feature, "featuresReentrancyGuardLock"));
+        return bytesToUint256(getPostionValue(flagLock));
     }
 
     function getFunctionLock(bytes4 functionSelector) public view returns (uint256) {
-        bytes32 functionGuardLock = keccak256(abi.encodePacked(functionSelector, "functionsReentrancyGuardLock"));
-        return bytesToUint256(getPostionValue(functionGuardLock));
+        bytes32 flagLock = keccak256(abi.encodePacked(functionSelector, "functionsReentrancyGuardLock"));
+        return bytesToUint256(getPostionValue(flagLock));
+    }
+
+    function getSenderLock(address sender)  public view returns (uint256) {
+        bytes32 flagLock = keccak256(abi.encodePacked(sender, "senderReentrancyGuardLock"));
+        return bytesToUint256(getPostionValue(flagLock));
     }
 
     function getPostionValue(bytes32 postionKey) internal view returns (bytes32) {

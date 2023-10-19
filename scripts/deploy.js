@@ -163,7 +163,14 @@ let featuresBundle;
       const costForDomain = await getTransactionCost(domain.deployTransaction);
       totalCost = totalCost.add(ethers.utils.parseEther(costForDomain));
       console.log(`Genesis domain created: ${addressGenesisDomain} at a cost of: ${costForDomain} ETH`);
-  
+
+    //   const ReentranceGuardAppFeature2 = await ethers.getContractAt('ReentrancyGuardApp', addressGenesisDomain);
+
+    // const initSecTx2 = await ReentranceGuardAppFeature2._initReentrancyGuard();
+    // const costForSecInit2 = await getTransactionCost(initSecTx2);
+    // totalCost = totalCost.add(ethers.utils.parseEther(costForSecInit2));
+    
+    // console.log(`   -> Reentrancy Guard feature initialized at a cost of: ${costForSecInit2} ETH`);
       
 
     // Obtain the DomainManagerApp from the Genesis domain
@@ -184,7 +191,13 @@ let featuresBundle;
     const addressPlugfyDomain = await domainManagerFeature.getDomainAddress(0); 
 
     console.log(`   -> Genesis.Plugfy domain created: ${addressPlugfyDomain} at a cost of: ${costForCreateDomain} ETH`);
+    const ReentranceGuardAppFeature1 = await ethers.getContractAt('ReentrancyGuardApp', addressPlugfyDomain);
 
+    const initSecTx1 = await ReentranceGuardAppFeature1._initReentrancyGuard();
+    const costForSecInit1 = await getTransactionCost(initSecTx1);
+    totalCost = totalCost.add(ethers.utils.parseEther(costForSecInit1));
+    
+    console.log(`       -> Reentrancy Guard feature initialized at a cost of: ${costForSecInit1} ETH`);
 
     const plugfyDomainManagerFeature = await ethers.getContractAt('DomainManagerApp', addressPlugfyDomain);
     // Create the "VickAi" subdomain of the "Plugfy" domain
@@ -203,6 +216,16 @@ let featuresBundle;
     
     console.log(`       -> Genesis.Plugfy.VickAi subdomain created: ${addressVickAiSubdomain} at a cost of: ${costForCreateVickAi} ETH`);
     
+    
+    const ReentranceGuardAppFeature0 = await ethers.getContractAt('ReentrancyGuardApp', addressVickAiSubdomain);
+
+    const initSecTx0 = await ReentranceGuardAppFeature0._initReentrancyGuard();
+    const costForSecInit0 = await getTransactionCost(initSecTx0);
+    totalCost = totalCost.add(ethers.utils.parseEther(costForSecInit0));
+    
+    console.log(`           -> Reentrancy Guard feature initialized at a cost of: ${costForSecInit0} ETH`);
+
+
     const vickAiDomainManagerFeature = await ethers.getContractAt('DomainManagerApp', addressVickAiSubdomain);
 
     // Create the "VickAi" subdomain of the "Plugfy" domain
@@ -269,6 +292,13 @@ let featuresBundle;
     
     console.log(`                   -> Genesis.Plugfy.VickAi.TokenSeed initialized - Name: ${await vickAiERC20TokenSeedFeature.name()} (${await vickAiERC20TokenSeedFeature.symbol()}) - Total Supply: ${await vickAiERC20TokenSeedFeature.balanceOf(owner.address)} at a cost of: ${costForInit} ETH`);
     
+    const ReentranceGuardAppFeature = await ethers.getContractAt('ReentrancyGuardApp', addressVickAiTokenSeedDomain);
+
+    const initSecTx = await ReentranceGuardAppFeature._initReentrancyGuard();
+    const costForSecInit = await getTransactionCost(initSecTx);
+    totalCost = totalCost.add(ethers.utils.parseEther(costForSecInit));
+    
+    console.log(`                   -> Reentrancy Guard feature initialized at a cost of: ${costForSecInit} ETH`);
 
     // //Sending 10 ethers to the token address
     //  const tx = await owner.sendTransaction({

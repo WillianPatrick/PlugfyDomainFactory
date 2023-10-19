@@ -186,9 +186,9 @@ contract FeatureStoreApp {
         IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("updateDependence(LibFeatureStore.Dependence)"))), true);
 
 
-        LibDomain.DomainStorage storage dsDomain = LibDomain.domainStorage();
-        address feature = dsDomain.featureAddressAndSelectorPosition[bytes4(keccak256(bytes("_initFeatureStore()")))].featureAddress;
-        IReentrancyGuardApp(address(this)).enableDisabledFeatureReentrancyGuard(feature, true);    
+        // LibDomain.DomainStorage storage dsDomain = LibDomain.domainStorage();
+        // address feature = dsDomain.featureAddressAndSelectorPosition[bytes4(keccak256(bytes("_initFeatureStore()")))].featureAddress;
+        // IReentrancyGuardApp(address(this)).enableDisabledFeatureReentrancyGuard(feature, true);    
 
         LibFeatureStore.domainStorage().initialized = true;
     }
