@@ -46,11 +46,11 @@ contract ERC20App {
         
         IAdminApp(address(this)).grantRole(LibTokenERC20.DEFAULT_ADMIN_ROLE, msg.sender); 
 
-        ReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("transfer(address,uint256)"))), true);
-        ReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("approve(address,uint256)"))), true);
-        ReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("transferFrom(address,address,uint256)"))), true);
-        ReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("burn(uint256)"))), true);
-        ReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("burnFrom(address,uint256)"))), true);   
+        ReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("transfer(address,uint256)"))), true);
+        ReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("approve(address,uint256)"))), true);
+        ReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("transferFrom(address,address,uint256)"))), true);
+        ReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("burn(uint256)"))), true);
+        ReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("burnFrom(address,uint256)"))), true);   
 
         IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("_init(string,string,uint256,uint8)"))), LibTokenERC20.DEFAULT_ADMIN_ROLE);       
 

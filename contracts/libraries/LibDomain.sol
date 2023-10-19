@@ -57,11 +57,11 @@ library LibDomain {
         mapping(bytes32 => mapping(bytes32 => bytes32)) roles;
         bool paused;
         bool domainReentrancyGuardEnabled;
-        bool domainGlobalReentrancyGuardLock; 
         mapping(bytes32 => bool) featuresReentrancyGuardEnabled; 
-        mapping(bytes32 => bool) featuresReentrancyGuardLook;        
-        mapping(bytes4 => bool) functionsReentrancyGuardEnabled; 
-        mapping(bytes4 => bool) functionsReentrancyGuardLook; 
+        mapping(bytes4 => bool) functionsReentrancyGuardEnabled;        
+        uint256 domainGlobalReentrancyGuardLock;         
+        mapping(bytes32 => uint256) featuresReentrancyGuardLook;        
+        mapping(bytes4 => uint256) functionsReentrancyGuardLook; 
     }
 
     function enforceIsTokenSuperAdmin() internal view {

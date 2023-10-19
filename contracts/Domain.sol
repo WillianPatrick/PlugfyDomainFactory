@@ -68,22 +68,22 @@ contract Domain {
             let shouldLock := or(or(isDomainReentrancyGuardEnabled, isFeatureReentrancyGuardEnabled), isFunctionReentrancyGuardEnabled)
 
             if shouldLock {
-                if or(or(sload(add(ds.slot, domainGuardLock)), sload(add(ds.slot, featureGuardLock))), sload(add(ds.slot, functionGuardLock))) {
+                if or(or(eq(sload(add(ds.slot, domainGuardLock)), 0), eq(sload(add(ds.slot, featureGuardLock)), 0)), eq(sload(add(ds.slot, functionGuardLock)), 0)) {
                     revert(0, returndatasize())
                 }
 
-                sstore(add(ds.slot, domainGuardLock), 1)
-                sstore(add(ds.slot, featureGuardLock), 1)
-                sstore(add(ds.slot, functionGuardLock), 1)
+                sstore(add(ds.slot, domainGuardLock), add(sload(add(ds.slot, domainGuardLock)), 1))
+                sstore(add(ds.slot, featureGuardLock), add(sload(add(ds.slot, featureGuardLock)), 1))
+                sstore(add(ds.slot, functionGuardLock), add(sload(add(ds.slot, functionGuardLock)), 1))
             }
 
             calldatacopy(0, 0, calldatasize())
             let result := delegatecall(gas(), feature, 0, calldatasize(), 0, 0)
 
             if shouldLock {
-                sstore(add(ds.slot, domainGuardLock), 0)
-                sstore(add(ds.slot, featureGuardLock), 0)
-                sstore(add(ds.slot, functionGuardLock), 0)
+                sstore(add(ds.slot, domainGuardLock), sub(sload(add(ds.slot, domainGuardLock)), 1))
+                sstore(add(ds.slot, featureGuardLock), sub(sload(add(ds.slot, featureGuardLock)), 1))
+                sstore(add(ds.slot, functionGuardLock), sub(sload(add(ds.slot, functionGuardLock)), 1))
             }
 
             let rSize := returndatasize()

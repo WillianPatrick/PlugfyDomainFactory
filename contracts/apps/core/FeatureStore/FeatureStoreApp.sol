@@ -151,21 +151,21 @@ contract FeatureStoreApp {
         IAdminApp(address(this)).grantRole(LibDomain.DEFAULT_ADMIN_ROLE, msg.sender);
 
         // Protecting the contract's functions from reentrancy attacks
-        IReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("addFunction(LibFeatureStore.Function)"))), true);
-        IReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("removeFunction(bytes32)"))), true);
-        IReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("addFeature(LibFeatureStore.Feature)"))), true);
-        IReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("removeFeature(bytes32)"))), true);
-        IReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("toggleFeatureDisabled(bytes32)"))), true);
-        IReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("addBundle(LibFeatureStore.BundleFeaturesFunctions)"))), true);
-        IReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("removeBundle(bytes32)"))), true);
-        IReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("toggleBundleDisabled(bytes32)"))), true);
-        IReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("addDependence(LibFeatureStore.Dependence)"))), true);
-        IReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("removeDependence(bytes32)"))), true);
-        IReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("toggleDependenceDisabled(bytes32)"))), true);
-        IReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("updateFunction(LibFeatureStore.Function)"))), true);
-        IReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("updateFeature(LibFeatureStore.Feature)"))), true);
-        IReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("updateBundle(LibFeatureStore.BundleFeaturesFunctions)"))), true);
-        IReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("updateDependence(LibFeatureStore.Dependence)"))), true);
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("addFunction(LibFeatureStore.Function)"))), true);
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("removeFunction(bytes32)"))), true);
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("addFeature(LibFeatureStore.Feature)"))), true);
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("removeFeature(bytes32)"))), true);
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("toggleFeatureDisabled(bytes32)"))), true);
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("addBundle(LibFeatureStore.BundleFeaturesFunctions)"))), true);
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("removeBundle(bytes32)"))), true);
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("toggleBundleDisabled(bytes32)"))), true);
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("addDependence(LibFeatureStore.Dependence)"))), true);
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("removeDependence(bytes32)"))), true);
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("toggleDependenceDisabled(bytes32)"))), true);
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("updateFunction(LibFeatureStore.Function)"))), true);
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("updateFeature(LibFeatureStore.Feature)"))), true);
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("updateBundle(LibFeatureStore.BundleFeaturesFunctions)"))), true);
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("updateDependence(LibFeatureStore.Dependence)"))), true);
 
         // Setting up roles for specific functions
         IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("addFunction(LibFeatureStore.Function)"))), LibDomain.DEFAULT_ADMIN_ROLE);

@@ -104,12 +104,12 @@ contract DexApp  {
         IAdminApp(address(this)).grantRole(LibDex.DEFAULT_ADMIN_ROLE, msg.sender);
 
         // Protecting the contract's functions from reentrancy attacks
-        IReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("swapNativeToken(bytes32,address,address)"))), true);
-        IReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("swapNativeTokenWithRouter(bytes32,address,address,address)"))), true);
-        IReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("swapToken(bytes32,address,address,uint256,address,address)"))), true);
-        IReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("swapTokenWithRouter(bytes32,address,address,address,uint256,address,address)"))), true);
-        IReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("createPurchOrder(bytes32,address,bool,uint256,uint256,uint256)"))), true);
-        IReentrancyGuardApp(address(this)).setFunctionReentrancyGuard(bytes4(keccak256(bytes("cancelOrder(bytes32,address,uint256,bool)"))), true);
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("swapNativeToken(bytes32,address,address)"))), true);
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("swapNativeTokenWithRouter(bytes32,address,address,address)"))), true);
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("swapToken(bytes32,address,address,uint256,address,address)"))), true);
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("swapTokenWithRouter(bytes32,address,address,address,uint256,address,address)"))), true);
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("createPurchOrder(bytes32,address,bool,uint256,uint256,uint256)"))), true);
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("cancelOrder(bytes32,address,uint256,bool)"))), true);
 
         // Setting up roles for specific functions
         IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("_init()"))), LibDex.DEFAULT_ADMIN_ROLE);
@@ -340,6 +340,9 @@ contract DexApp  {
                     ITokenERC20(order.salesTokenAddress).burn(order.burnTokensClose); 
                     ds.tokensBurned[gatewayId][salesTokenAddress] += order.burnTokensClose;
                     order.burnTokensClose = 0;
+
+                    IAdminApp(salesTokenAddress).removeFunctionRole(bytes4(keccak256(bytes("transfer(address,uint256)"))));  
+                    IAdminApp(salesTokenAddress).removeFunctionRole(bytes4(keccak256(bytes("createPurchOrder(bytes32,address,bool,uint256,uint256,uint256)"))));  
                 }
                 ds.currentOrder[gatewayId][salesTokenAddress]++;
 
