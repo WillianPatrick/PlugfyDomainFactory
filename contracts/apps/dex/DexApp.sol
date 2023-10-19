@@ -6,6 +6,7 @@ import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { IAdminApp } from "../core/AccessControl/IAdminApp.sol";
 import { IReentrancyGuardApp } from "../core/AccessControl/IReentrancyGuardApp.sol";
+import { LibDomain } from "../../libraries/LibDomain.sol";
 
 interface ITokenERC20 {
     function deposit() external payable;
@@ -101,21 +102,20 @@ contract DexApp  {
         LibDex.DexStorage storage ds = LibDex.domainStorage();
         require(!ds.initialized, "Initialization has already been executed.");
 
-        IAdminApp(address(this)).grantRole(LibDex.DEFAULT_ADMIN_ROLE, msg.sender);
-
+        // Setting up roles for specific functions
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("_initDex()"))), LibDex.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("createGateway(string,address,LibDex.Router[])"))), LibDex.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("setTokenDestination(bytes32,address,address)"))), LibDex.DEFAULT_ADMIN_ROLE);
         // Protecting the contract's functions from reentrancy attacks
-        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("swapNativeToken(bytes32,address,address)"))), true);
-        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("swapNativeTokenWithRouter(bytes32,address,address,address)"))), true);
-        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("swapToken(bytes32,address,address,uint256,address,address)"))), true);
         IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("swapTokenWithRouter(bytes32,address,address,address,uint256,address,address)"))), true);
         IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("createPurchOrder(bytes32,address,bool,uint256,uint256,uint256)"))), true);
         IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("cancelOrder(bytes32,address,uint256,bool)"))), true);
 
-        // Setting up roles for specific functions
-        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("_init()"))), LibDex.DEFAULT_ADMIN_ROLE);
-        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("createGateway(string,address,LibDex.Router[])"))), LibDex.DEFAULT_ADMIN_ROLE);
-        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("setTokenDestination(bytes32,address,address)"))), LibDex.DEFAULT_ADMIN_ROLE);
+
         ds.initialized = true;
+        LibDomain.DomainStorage storage dsDomain = LibDomain.domainStorage();
+        address feature = dsDomain.featureAddressAndSelectorPosition[bytes4(keccak256(bytes("_initDex()")))].featureAddress;
+        IReentrancyGuardApp(address(this)).enableDisabledFeatureReentrancyGuard(feature, true);
     }
 
     function createGateway(string memory _gatewayName, address _onlyReceiveSwapTokenAddres, LibDex.Router[] memory _routers) public returns (bytes32) {
@@ -337,6 +337,10 @@ contract DexApp  {
                         order.burnTokensClose += ERC20(address(this)).balanceOf(address(this));
                         ds.airdropAmount[gatewayId][salesTokenAddress] = 0;
                         IAdminApp(salesTokenAddress).removeFunctionRole(bytes4(keccak256(bytes("transfer(address,uint256)"))));  
+                        IAdminApp(salesTokenAddress).removeFunctionRole(bytes4(keccak256(bytes("transferFrom(address,address,uint256)")))); 
+                        IAdminApp(salesTokenAddress).removeFunctionRole(bytes4(keccak256(bytes("approve(address,uint256)")))); 
+                        IAdminApp(salesTokenAddress).removeFunctionRole(bytes4(keccak256(bytes("burn(uint256)")))); 
+                        IAdminApp(salesTokenAddress).removeFunctionRole(bytes4(keccak256(bytes("burnFrom(address,uint256)"))));                         
                         IAdminApp(salesTokenAddress).removeFunctionRole(bytes4(keccak256(bytes("createPurchOrder(bytes32,address,bool,uint256,uint256,uint256)"))));                          
                     }
                     ITokenERC20(order.salesTokenAddress).burn(order.burnTokensClose); 
@@ -405,7 +409,11 @@ contract DexApp  {
 
         if(preOrder && !ds.preOrder[gatewayId][salesTokenAddress]){
             ds.preOrder[gatewayId][salesTokenAddress] = true;
-            IAdminApp(salesTokenAddress).setFunctionRole(bytes4(keccak256(bytes("transfer(address,uint256)"))), LibDex.DEFAULT_ADMIN_ROLE);  
+            IAdminApp(salesTokenAddress).setFunctionRole(bytes4(keccak256(bytes("transfer(address,uint256)"))), LibDex.DEFAULT_ADMIN_ROLE);    
+            IAdminApp(salesTokenAddress).setFunctionRole(bytes4(keccak256(bytes("transferFrom(address,address,uint256)"))), LibDex.DEFAULT_ADMIN_ROLE);  
+            IAdminApp(salesTokenAddress).setFunctionRole(bytes4(keccak256(bytes("approve(address,uint256)"))), LibDex.DEFAULT_ADMIN_ROLE);  
+            IAdminApp(salesTokenAddress).setFunctionRole(bytes4(keccak256(bytes("burn(uint256)"))), LibDex.DEFAULT_ADMIN_ROLE);  
+            IAdminApp(salesTokenAddress).setFunctionRole(bytes4(keccak256(bytes("burnFrom(address,uint256)"))), LibDex.DEFAULT_ADMIN_ROLE);       
             IAdminApp(salesTokenAddress).setFunctionRole(bytes4(keccak256(bytes("createPurchOrder(bytes32,address,bool,uint256,uint256,uint256)"))), LibDex.DEFAULT_ADMIN_ROLE);  
         }
 

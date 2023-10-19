@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 import { IAdminApp } from "../core/AccessControl/IAdminApp.sol";
-import { ReentrancyGuardApp } from "../core/AccessControl/ReentrancyGuardApp.sol";
-
+import { IReentrancyGuardApp } from "../core/AccessControl/IReentrancyGuardApp.sol";
+import { LibDomain } from "../../libraries/LibDomain.sol";
 error NotTokenAdmin();
 
 
@@ -43,22 +43,24 @@ contract ERC20App {
     function _initERC20(string memory _name, string memory _symbol, uint256 _totalSupply, uint8 _decimals) public {
         LibTokenERC20.TokenData storage ds = LibTokenERC20.domainStorage();
         require(!ds.initialized, "Initialization has already been executed.");
-        
-        IAdminApp(address(this)).grantRole(LibTokenERC20.DEFAULT_ADMIN_ROLE, msg.sender); 
 
-        ReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("transfer(address,uint256)"))), true);
-        ReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("approve(address,uint256)"))), true);
-        ReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("transferFrom(address,address,uint256)"))), true);
-        ReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("burn(uint256)"))), true);
-        ReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("burnFrom(address,uint256)"))), true);   
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("_initERC20(string,string,uint256,uint8)"))), LibTokenERC20.DEFAULT_ADMIN_ROLE);  
 
-        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("_initERC20(string,string,uint256,uint8)"))), LibTokenERC20.DEFAULT_ADMIN_ROLE);       
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("transfer(address,uint256)"))), true);
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("approve(address,uint256)"))), true);
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("transferFrom(address,address,uint256)"))), true);
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("burn(uint256)"))), true);
+        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("burnFrom(address,uint256)"))), true);       
 
         ds.name = _name;
         ds.symbol = _symbol;
         ds.decimals = uint8(_decimals);
         ds.balances[msg.sender] = _totalSupply;
         ds.totalSupply = _totalSupply;
+
+        LibDomain.DomainStorage storage dsDomain = LibDomain.domainStorage();
+        address feature = dsDomain.featureAddressAndSelectorPosition[bytes4(keccak256(bytes("_initERC20(string,string,uint256,uint8)")))].featureAddress;
+        IReentrancyGuardApp(address(this)).enableDisabledFeatureReentrancyGuard(feature, true);        
         ds.initialized = true;
      
     }

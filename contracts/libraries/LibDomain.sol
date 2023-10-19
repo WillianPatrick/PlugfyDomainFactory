@@ -56,9 +56,9 @@ library LibDomain {
         mapping(bytes4 => bytes32) functionRoles;
         mapping(bytes32 => mapping(bytes32 => bytes32)) roles;
         bool paused;
-        bool domainReentrancyGuardEnabled;
-        mapping(bytes32 => bool) featuresReentrancyGuardEnabled; 
-        mapping(bytes4 => bool) functionsReentrancyGuardEnabled;        
+        uint domainReentrancyGuardEnabled;
+        mapping(bytes32 => uint) featuresReentrancyGuardEnabled; 
+        mapping(bytes4 => uint) functionsReentrancyGuardEnabled;        
         uint256 domainGlobalReentrancyGuardLock;         
         mapping(bytes32 => uint256) featuresReentrancyGuardLook;        
         mapping(bytes4 => uint256) functionsReentrancyGuardLook; 

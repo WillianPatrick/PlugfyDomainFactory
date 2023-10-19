@@ -145,10 +145,28 @@ contract FeatureStoreApp {
         _;
     }
 
-    function _init() public {
+    function _initFeatureStore() public {
         require(!LibFeatureStore.domainStorage().initialized, "Initialization has already been executed.");
 
         IAdminApp(address(this)).grantRole(LibDomain.DEFAULT_ADMIN_ROLE, msg.sender);
+
+        // Setting up roles for specific functions
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("_initFeatureStore()"))), LibDomain.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("addFunction(LibFeatureStore.Function)"))), LibDomain.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("removeFunction(bytes32)"))), LibDomain.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("addFeature(LibFeatureStore.Feature)"))), LibDomain.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("removeFeature(bytes32)"))), LibDomain.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("toggleFeatureDisabled(bytes32)"))), LibDomain.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("addBundle(LibFeatureStore.BundleFeaturesFunctions)"))), LibDomain.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("removeBundle(bytes32)"))), LibDomain.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("toggleBundleDisabled(bytes32)"))), LibDomain.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("addDependence(LibFeatureStore.Dependence)"))), LibDomain.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("removeDependence(bytes32)"))), LibDomain.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("toggleDependenceDisabled(bytes32)"))), LibDomain.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("updateFunction(LibFeatureStore.Function)"))), LibDomain.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("updateFeature(LibFeatureStore.Feature)"))), LibDomain.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("updateBundle(LibFeatureStore.BundleFeaturesFunctions)"))), LibDomain.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("updateDependence(LibFeatureStore.Dependence)"))), LibDomain.DEFAULT_ADMIN_ROLE);
 
         // Protecting the contract's functions from reentrancy attacks
         IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("addFunction(LibFeatureStore.Function)"))), true);
@@ -167,22 +185,10 @@ contract FeatureStoreApp {
         IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("updateBundle(LibFeatureStore.BundleFeaturesFunctions)"))), true);
         IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("updateDependence(LibFeatureStore.Dependence)"))), true);
 
-        // Setting up roles for specific functions
-        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("addFunction(LibFeatureStore.Function)"))), LibDomain.DEFAULT_ADMIN_ROLE);
-        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("removeFunction(bytes32)"))), LibDomain.DEFAULT_ADMIN_ROLE);
-        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("addFeature(LibFeatureStore.Feature)"))), LibDomain.DEFAULT_ADMIN_ROLE);
-        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("removeFeature(bytes32)"))), LibDomain.DEFAULT_ADMIN_ROLE);
-        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("toggleFeatureDisabled(bytes32)"))), LibDomain.DEFAULT_ADMIN_ROLE);
-        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("addBundle(LibFeatureStore.BundleFeaturesFunctions)"))), LibDomain.DEFAULT_ADMIN_ROLE);
-        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("removeBundle(bytes32)"))), LibDomain.DEFAULT_ADMIN_ROLE);
-        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("toggleBundleDisabled(bytes32)"))), LibDomain.DEFAULT_ADMIN_ROLE);
-        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("addDependence(LibFeatureStore.Dependence)"))), LibDomain.DEFAULT_ADMIN_ROLE);
-        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("removeDependence(bytes32)"))), LibDomain.DEFAULT_ADMIN_ROLE);
-        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("toggleDependenceDisabled(bytes32)"))), LibDomain.DEFAULT_ADMIN_ROLE);
-        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("updateFunction(LibFeatureStore.Function)"))), LibDomain.DEFAULT_ADMIN_ROLE);
-        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("updateFeature(LibFeatureStore.Feature)"))), LibDomain.DEFAULT_ADMIN_ROLE);
-        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("updateBundle(LibFeatureStore.BundleFeaturesFunctions)"))), LibDomain.DEFAULT_ADMIN_ROLE);
-        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("updateDependence(LibFeatureStore.Dependence)"))), LibDomain.DEFAULT_ADMIN_ROLE);
+
+        LibDomain.DomainStorage storage dsDomain = LibDomain.domainStorage();
+        address feature = dsDomain.featureAddressAndSelectorPosition[bytes4(keccak256(bytes("_initFeatureStore()")))].featureAddress;
+        IReentrancyGuardApp(address(this)).enableDisabledFeatureReentrancyGuard(feature, true);    
 
         LibFeatureStore.domainStorage().initialized = true;
     }
