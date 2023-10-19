@@ -97,7 +97,7 @@ contract DexApp  {
     event OrderExecuted(address indexed buyer, address indexed seller, uint256 amount, uint256 price);
     event TokensClaimed(address indexed claimer, uint256 amount);
 
-    function _init() public {
+    function _initDex() public {
         LibDex.DexStorage storage ds = LibDex.domainStorage();
         require(!ds.initialized, "Initialization has already been executed.");
 
@@ -336,13 +336,12 @@ contract DexApp  {
                     if (order.isSellOrder && order.preOrder && ds.currentOrder[gatewayId][salesTokenAddress] == ds.sellOrders[gatewayId][salesTokenAddress].length) {
                         order.burnTokensClose += ERC20(address(this)).balanceOf(address(this));
                         ds.airdropAmount[gatewayId][salesTokenAddress] = 0;
+                        IAdminApp(salesTokenAddress).removeFunctionRole(bytes4(keccak256(bytes("transfer(address,uint256)"))));  
+                        IAdminApp(salesTokenAddress).removeFunctionRole(bytes4(keccak256(bytes("createPurchOrder(bytes32,address,bool,uint256,uint256,uint256)"))));                          
                     }
                     ITokenERC20(order.salesTokenAddress).burn(order.burnTokensClose); 
                     ds.tokensBurned[gatewayId][salesTokenAddress] += order.burnTokensClose;
                     order.burnTokensClose = 0;
-
-                    IAdminApp(salesTokenAddress).removeFunctionRole(bytes4(keccak256(bytes("transfer(address,uint256)"))));  
-                    IAdminApp(salesTokenAddress).removeFunctionRole(bytes4(keccak256(bytes("createPurchOrder(bytes32,address,bool,uint256,uint256,uint256)"))));  
                 }
                 ds.currentOrder[gatewayId][salesTokenAddress]++;
 

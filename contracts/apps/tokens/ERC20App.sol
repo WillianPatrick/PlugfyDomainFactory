@@ -40,7 +40,7 @@ contract ERC20App {
     event Approval(address indexed owner, address indexed spender, uint256 value);
     event Transfer(address indexed from, address indexed to, uint256 value);
 
-    function _init(string memory _name, string memory _symbol, uint256 _totalSupply, uint8 _decimals) public {
+    function _initERC20(string memory _name, string memory _symbol, uint256 _totalSupply, uint8 _decimals) public {
         LibTokenERC20.TokenData storage ds = LibTokenERC20.domainStorage();
         require(!ds.initialized, "Initialization has already been executed.");
         
@@ -52,7 +52,7 @@ contract ERC20App {
         ReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("burn(uint256)"))), true);
         ReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("burnFrom(address,uint256)"))), true);   
 
-        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("_init(string,string,uint256,uint8)"))), LibTokenERC20.DEFAULT_ADMIN_ROLE);       
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("_initERC20(string,string,uint256,uint8)"))), LibTokenERC20.DEFAULT_ADMIN_ROLE);       
 
         ds.name = _name;
         ds.symbol = _symbol;

@@ -263,7 +263,7 @@ let featuresBundle;
     // }    
     
     const vickAiERC20TokenSeedFeature = await ethers.getContractAt('ERC20App', addressVickAiTokenSeedDomain);
-    const initTx = await vickAiERC20TokenSeedFeature._init("Vick Ai Seed","VICK-S", 2500000000000000000000000n, 18);
+    const initTx = await vickAiERC20TokenSeedFeature._initERC20("Vick Ai Seed","VICK-S", 2500000000000000000000000n, 18);
     const costForInit = await getTransactionCost(initTx);
     totalCost = totalCost.add(ethers.utils.parseEther(costForInit));
     
@@ -291,7 +291,7 @@ let featuresBundle;
     console.log(`               -> DexApp feature deployed: ${dexApp.address} at a cost of: ${costForDexApp} ETH`);    
     const dexAppFeature = await ethers.getContractAt('DexApp', addressVickAiTokenSeedDomain);
 
-    const initDexTx = await dexAppFeature._init();
+    const initDexTx = await dexAppFeature._initDex();
     const costForDexInit = await getTransactionCost(initDexTx);
     totalCost = totalCost.add(ethers.utils.parseEther(costForDexInit));
     

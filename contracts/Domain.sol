@@ -69,7 +69,7 @@ contract Domain {
             let shouldLock := or(or(isDomainReentrancyGuardEnabled, isFeatureReentrancyGuardEnabled), isFunctionReentrancyGuardEnabled)
 
             if shouldLock {
-                if or(or(iszero(eq(sload(add(ds.slot, domainGuardLock)), 0)), iszero(eq(sload(add(ds.slot, featureGuardLock)), 0))), iszero(eq(sload(add(ds.slot, functionGuardLock)), 0))){
+                if or(or(and(iszero(eq(sload(add(ds.slot, domainGuardLock)), 0)),isDomainReentrancyGuardEnabled), and(iszero(eq(sload(add(ds.slot, featureGuardLock)), 0)),isFeatureReentrancyGuardEnabled)), and(iszero(eq(sload(add(ds.slot, functionGuardLock)), 0)), isFunctionReentrancyGuardEnabled)){
                     let ptr := mload(0x40)
                     mstore(ptr, errorSelector)
                     mstore(add(ptr, 0x04), sload(add(ds.slot, domainGuardLock)))
