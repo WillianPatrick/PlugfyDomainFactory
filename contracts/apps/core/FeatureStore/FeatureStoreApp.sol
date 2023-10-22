@@ -3,7 +3,6 @@
 pragma solidity ^0.8.17;
 
 import { LibDomain } from "../../../libraries/LibDomain.sol";
-import { OwnershipApp } from "../AccessControl/OwnershipApp.sol";
 import { AccessControlApp } from "../AccessControl/AccessControlApp.sol";
 import { IFeatureManager } from "../FeatureManager/IFeatureManager.sol";
 import { IAdminApp } from "../AccessControl/IAdminApp.sol";

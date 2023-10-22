@@ -50,6 +50,49 @@ function getAppAddressesBySelectors(contract, functionNames) {
   return addresses;
 }
 
+async function initializeFeature(contractName, functionName, contractAddress, args = []) {
+  const contract = await ethers.getContractAt(contractName, contractAddress); // Mude 'Contract' para o nome real do seu contrato ou mantenha assim se for genérico
+  if (!contract[functionName]) {
+      throw new Error(`               -> ${contractName} - ${functionName} does not exist on the contract.`);
+  }
+
+  const tx = await contract[functionName](...args);
+  await tx.wait();
+
+  const cost = await getTransactionCost(tx);
+  console.log(`               -> ${contractName} - ${functionName} executed at a cost of ${cost} ETH`);
+  return cost;
+}
+
+async function monitorDomainEvents(domainAddress) {
+  const DomainContract = await ethers.getContractAt("Domain", domainAddress);
+
+  // DomainContract.on("LogDelegateBeforeCount", (hash, count, event) => {
+  //   console.log("LogDelegateBeforeCount Event Emitted:");
+  //   console.log("Hash: " + hash + " - Count: "+ count);
+  //   // Process event. For example, save it to a database or notify an external system.
+  // });  
+
+  // // Listen for DelegateBefore events
+  // DomainContract.on("DelegateBefore", (contractAddress, feature, functionSelector, data, event) => {
+  //     console.log("DelegateBefore Event Emitted:");
+  //     console.log("Contract Address:", contractAddress);
+  //     console.log("Feature:", feature);
+  //     console.log("Function Selector:", functionSelector);
+  //     // Process event. For example, save it to a database or notify an external system.
+  // });
+
+  // // Listen for DelegateAfter events
+  // DomainContract.on("DelegateAfter", (contractAddress, feature, functionSelector, data, event) => {
+  //     console.log("DelegateAfter Event Emitted:");
+  //     console.log("Contract Address:", contractAddress);
+  //     console.log("Feature:", feature);
+  //     console.log("Function Selector:", functionSelector);
+  //     // Process event. For example, save it to a database or notify an external system.
+  // });
+
+  console.log(`Monitoring events for Domain contract at address ${domainAddress}...`);
+}
 
 async function main() {
   let totalCost = ethers.BigNumber.from("0");
@@ -58,7 +101,6 @@ const FeatureNames = [
     'FeatureStoreApp',
     'FeatureManagerApp',
     'FeatureRoutesApp',
-    'OwnershipApp',
     'AdminApp',
     'DomainManagerApp',
     'ReentrancyGuardApp'
@@ -172,8 +214,10 @@ let featuresBundle;
     
     // console.log(`   -> Reentrancy Guard feature initialized at a cost of: ${costForSecInit2} ETH`);
       
-
+    totalCost = totalCost.add(ethers.utils.parseEther(await initializeFeature('AdminApp','_initAdminApp', addressGenesisDomain, [])));
+    totalCost = totalCost.add(ethers.utils.parseEther(await initializeFeature('DomainManagerApp','_initDomainManagerApp', addressGenesisDomain, [])));
     // Obtain the DomainManagerApp from the Genesis domain
+    await monitorDomainEvents(addressGenesisDomain);
     const domainManagerFeature = await ethers.getContractAt('DomainManagerApp', addressGenesisDomain);
 
     // Create the "Plugfy" domain using the same features as the "Genesis" domain
@@ -189,15 +233,12 @@ let featuresBundle;
     totalCost = totalCost.add(ethers.utils.parseEther(costForCreateDomain));
 
     const addressPlugfyDomain = await domainManagerFeature.getDomainAddress(0); 
+    monitorDomainEvents(addressPlugfyDomain);
 
     console.log(`   -> Genesis.Plugfy domain created: ${addressPlugfyDomain} at a cost of: ${costForCreateDomain} ETH`);
-    const ReentranceGuardAppFeature1 = await ethers.getContractAt('ReentrancyGuardApp', addressPlugfyDomain);
-
-    const initSecTx1 = await ReentranceGuardAppFeature1._initReentrancyGuard();
-    const costForSecInit1 = await getTransactionCost(initSecTx1);
-    totalCost = totalCost.add(ethers.utils.parseEther(costForSecInit1));
     
-    console.log(`       -> Reentrancy Guard feature initialized at a cost of: ${costForSecInit1} ETH`);
+    totalCost = totalCost.add(ethers.utils.parseEther(await initializeFeature('ReentrancyGuardApp','_initReentrancyGuard', addressPlugfyDomain, [])));
+
 
     const plugfyDomainManagerFeature = await ethers.getContractAt('DomainManagerApp', addressPlugfyDomain);
     // Create the "VickAi" subdomain of the "Plugfy" domain
@@ -213,17 +254,11 @@ let featuresBundle;
     totalCost = totalCost.add(ethers.utils.parseEther(costForCreateVickAi));
     
     const addressVickAiSubdomain = await plugfyDomainManagerFeature.getDomainAddress(0);
-    
+    await monitorDomainEvents(addressVickAiSubdomain);
     console.log(`       -> Genesis.Plugfy.VickAi subdomain created: ${addressVickAiSubdomain} at a cost of: ${costForCreateVickAi} ETH`);
     
     
-    const ReentranceGuardAppFeature0 = await ethers.getContractAt('ReentrancyGuardApp', addressVickAiSubdomain);
-
-    const initSecTx0 = await ReentranceGuardAppFeature0._initReentrancyGuard();
-    const costForSecInit0 = await getTransactionCost(initSecTx0);
-    totalCost = totalCost.add(ethers.utils.parseEther(costForSecInit0));
-    
-    console.log(`           -> Reentrancy Guard feature initialized at a cost of: ${costForSecInit0} ETH`);
+    totalCost = totalCost.add(ethers.utils.parseEther(await initializeFeature('ReentrancyGuardApp','_initReentrancyGuard', addressVickAiSubdomain, [])));
 
 
     const vickAiDomainManagerFeature = await ethers.getContractAt('DomainManagerApp', addressVickAiSubdomain);
@@ -269,7 +304,7 @@ let featuresBundle;
 
     await vickAiDomainManagerFeature.createDomain(addressVickAiSubdomain, "TokenSeed", extensibleFeatures, vickSeedTokenArgs);
     const addressVickAiTokenSeedDomain = await vickAiDomainManagerFeature.getDomainAddress(0); // Assuming index 2 because Genesis is at index 0 and Plugfy is at index 1
-
+    await monitorDomainEvents(addressVickAiTokenSeedDomain);
     console.log("           -> Genesis.Plugfy.VickAi.TokenSeed subdomain created: " + addressVickAiTokenSeedDomain);    
     console.log(`               -> ERC20 feature deployed: ${erc20App.address} at a cost of: ${costForERC20App} ETH`); 
 
@@ -284,21 +319,12 @@ let featuresBundle;
     //     totalCost = totalCost.add(ethers.utils.parseEther(costForSetGuard));
     //     console.log(`                 - Set Reentrancy Guard for function ${functionName} at a cost of: ${costForSetGuard} ETH`);
     // }    
-    
     const vickAiERC20TokenSeedFeature = await ethers.getContractAt('ERC20App', addressVickAiTokenSeedDomain);
-    const initTx = await vickAiERC20TokenSeedFeature._initERC20("Vick Ai Seed","VICK-S", 2500000000000000000000000n, 18);
-    const costForInit = await getTransactionCost(initTx);
-    totalCost = totalCost.add(ethers.utils.parseEther(costForInit));
-    
-    console.log(`                   -> Genesis.Plugfy.VickAi.TokenSeed initialized - Name: ${await vickAiERC20TokenSeedFeature.name()} (${await vickAiERC20TokenSeedFeature.symbol()}) - Total Supply: ${await vickAiERC20TokenSeedFeature.balanceOf(owner.address)} at a cost of: ${costForInit} ETH`);
-    
+    totalCost = totalCost.add(ethers.utils.parseEther(await initializeFeature('ERC20App','_initERC20', vickAiERC20TokenSeedFeature.address, ["Vick Ai Seed", "VICK-S", 2500000000000000000000000n, 18])));
+  
     const ReentranceGuardAppFeature = await ethers.getContractAt('ReentrancyGuardApp', addressVickAiTokenSeedDomain);
+    totalCost = totalCost.add(ethers.utils.parseEther(await initializeFeature('ReentrancyGuardApp','_initReentrancyGuard', ReentranceGuardAppFeature.address, [])));
 
-    const initSecTx = await ReentranceGuardAppFeature._initReentrancyGuard();
-    const costForSecInit = await getTransactionCost(initSecTx);
-    totalCost = totalCost.add(ethers.utils.parseEther(costForSecInit));
-    
-    console.log(`                   -> Reentrancy Guard feature initialized at a cost of: ${costForSecInit} ETH`);
 
     // //Sending 10 ethers to the token address
     //  const tx = await owner.sendTransaction({

@@ -107,14 +107,12 @@ contract DexApp  {
         IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("createGateway(string,address,LibDex.Router[])"))), LibDex.DEFAULT_ADMIN_ROLE);
         IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("setTokenDestination(bytes32,address,address)"))), LibDex.DEFAULT_ADMIN_ROLE);
         // Protecting the contract's functions from reentrancy attacks
-        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("swapTokenWithRouter(bytes32,address,address,address,uint256,address,address)"))), true);
+        //IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("swapTokenWithRouter(bytes32,address,address,address,uint256,address,address)"))), true);
         //IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("createPurchOrder(bytes32,address,bool,uint256,uint256,uint256)"))), true);
-        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("cancelOrder(bytes32,address,uint256,bool)"))), true);
+        //IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("cancelOrder(bytes32,address,uint256,bool)"))), true);
 
 
         ds.initialized = true;
-        LibDomain.DomainStorage storage dsDomain = LibDomain.domainStorage();
-        address feature = dsDomain.featureAddressAndSelectorPosition[bytes4(keccak256(bytes("_initDex()")))].featureAddress;
         IReentrancyGuardApp(address(this)).enableDisabledDomainReentrancyGuard(true);
     }
 

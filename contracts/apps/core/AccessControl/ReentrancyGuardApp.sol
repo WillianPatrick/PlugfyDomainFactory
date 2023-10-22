@@ -4,13 +4,27 @@ import { LibDomain } from "../../../libraries/LibDomain.sol";
 import { IReentrancyGuardApp } from "./IReentrancyGuardApp.sol";
 import { IAdminApp } from "./IAdminApp.sol";
 
+library LibReentrancyGuard {
+    bytes32 constant DOMAIN_STORAGE_POSITION = keccak256("security.reentrance.guard.standard.storage");
+
+    struct DomainStorage{
+        bool initialized;
+    }
+
+    function domainStorage() internal pure returns (DomainStorage storage ds) {
+        bytes32 position = DOMAIN_STORAGE_POSITION;
+        assembly {
+            ds.slot := position
+        }
+    }
+}
+
 contract ReentrancyGuardApp is IReentrancyGuardApp{
-
     function _initReentrancyGuard() public {
-        //LibDomain.DomainStorage storage ds = LibDomain.domainStorage();
-        //require(!ds.initialized, "Initialization has already been executed.");
+        LibReentrancyGuard.DomainStorage storage ds = LibReentrancyGuard.domainStorage();
+        require(!ds.initialized, "Initialization has already been executed.");
 
-        // Setting up roles for specific functions
+        //Setting up roles for specific functions
         IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("_initReentrancyGuard()"))), LibDomain.DEFAULT_ADMIN_ROLE);
         IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("enableDisabledDomainReentrancyGuard(bool)"))), LibDomain.DEFAULT_ADMIN_ROLE);
         IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("enableDisabledFeatureReentrancyGuard(address,bool)"))), LibDomain.DEFAULT_ADMIN_ROLE);
@@ -23,8 +37,9 @@ contract ReentrancyGuardApp is IReentrancyGuardApp{
         IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("enableDisabledFunctionReentrancyGuard(bytes4,bool)"))), true);
         IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("enableDisabledSenderReentrancyGuard(bool)"))), true);
 
-        //ds.initialized = true;
+        ds.initialized = true;
     }
+
 
 
     function enableDisabledDomainReentrancyGuard(bool status) public {

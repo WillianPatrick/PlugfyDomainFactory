@@ -4,8 +4,66 @@ pragma solidity ^0.8.17;
 import {LibDomain} from "../../../libraries/LibDomain.sol";
 import {IAdminApp} from "./IAdminApp.sol";
 
+library LibAdmin {
+    bytes32 constant DOMAIN_STORAGE_POSITION = keccak256("admin.standard.storage");
+
+    struct DomainStorage{
+        bool initialized;
+    }
+
+    function domainStorage() internal pure returns (DomainStorage storage ds) {
+        bytes32 position = DOMAIN_STORAGE_POSITION;
+        assembly {
+            ds.slot := position
+        }
+    }    
+}
+
 contract AdminApp is IAdminApp {
     bytes32 constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+
+    function _initAdminApp() public {
+        LibAdmin.DomainStorage storage ds = LibAdmin.domainStorage();
+        require(!ds.initialized, "Initialization has already been executed.");
+
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("_initAdminApp()"))), LibDomain.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("grantRole(bytes32,address)"))), LibDomain.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("revokeRole(bytes32,address)"))), LibDomain.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("setRoleAdmin(bytes32,bytes32)"))), LibDomain.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("setFunctionRole(bytes4,bytes32)"))), LibDomain.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("removeFunctionRole(bytes4)"))), LibDomain.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("pauseDomain()"))), PAUSER_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("unpauseDomain()"))), PAUSER_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("pauseFeatures(address[])"))), PAUSER_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("unpauseFeatures(address[])"))), PAUSER_ROLE);
+
+        // Add "before" delegation to the domain using LibDomain functions
+        LibDomain.addOrUpdateDelegateBefore(bytes4(keccak256(bytes("_callBackDelegateBeforeAdminApp(address,bytes4,bytes)"))), address(0), "AdminApp");
+
+        ds.initialized = true;
+    }
+
+    function _callBackDelegateBeforeAdminApp(address feature, bytes4 functionSelector, bytes memory data) external view {
+        LibDomain.DomainStorage storage ds = LibDomain.domainStorage();
+
+        require(!ds.paused || ds.superAdmin == msg.sender || ds.contractOwner == msg.sender, "This domain is currently paused and is not in operation");
+
+        if (ds.functionRoles[functionSelector] != bytes32(0)) {
+            require(ds.accessControl[ds.functionRoles[functionSelector]][msg.sender] || ds.superAdmin == msg.sender || ds.contractOwner == msg.sender, "Sender does not have access to this function");
+        }
+        
+        require(!ds.pausedFeatures[feature] || ds.superAdmin == msg.sender || ds.contractOwner == msg.sender, "This feature and functions are currently paused and not in operation");
+    }
+
+
+    function transferOwnership(address _newOwner) external {
+        LibDomain.enforceIsContractOwnerAdmin();
+        LibDomain.setContractOwner(_newOwner);
+    }
+
+    function owner() external view returns (address owner_) {
+        owner_ = LibDomain.contractOwner();
+    }
 
     modifier onlyAdminRole(bytes32 role){
         LibDomain.DomainStorage storage ds = LibDomain.domainStorage();

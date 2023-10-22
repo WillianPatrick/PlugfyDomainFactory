@@ -11,7 +11,7 @@ contract AccessControlApp {
     }
 
    modifier onlyRoleName(string memory role) {
-        require(hasRole(keccak256(bytes(role)), msg.sender), "AccessControl: sender does not have required role");
+        require(hasRole(keccak256(abi.encodePacked(role)), msg.sender), "AccessControl: sender does not have required role");
         _;
     }    
 

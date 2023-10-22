@@ -11,6 +11,7 @@ library LibDomainManager {
     struct DomainStorage{
         address owner;
         address[] domains;
+        bool initialized;
     }
 
     function domainStorage() internal pure returns (DomainStorage storage ds) {
@@ -25,6 +26,19 @@ library LibDomainManager {
 contract DomainManagerApp  {
 
     event DomainCreated(address indexed domainAddress, address indexed owner);
+
+    function _initDomainManagerApp() public {
+        LibDomainManager.DomainStorage storage ds = LibDomainManager.domainStorage();
+        require(!ds.initialized, "Initialization has already been executed.");
+
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("_initDomainManagerApp()"))), LibDomainManager.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("createDomain(address,string,IFeatureManager.Feature[],DomainArgs)"))), LibDomainManager.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("getTotalDomains()"))), LibDomainManager.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("getDomainAddress(uint256)"))), LibDomainManager.DEFAULT_ADMIN_ROLE);
+
+        ds.initialized = true;
+    }
+
     function createDomain(address _parentDomain, string memory _domainName, IFeatureManager.Feature[] memory _features, DomainArgs memory _args) public returns (address) {
         LibDomainManager.DomainStorage storage ds = LibDomainManager.domainStorage();
         _args.owner = _args.owner == address(0) ? msg.sender : _args.owner;
