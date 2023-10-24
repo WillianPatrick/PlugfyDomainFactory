@@ -1,5 +1,11 @@
 const { ethers, upgrades } = require("hardhat");
 
+const red = '\x1b[31m';
+const green = '\x1b[32m';
+const yellow = '\x1b[33m';
+const blue = '\x1b[34m';
+const reset = '\x1b[0m';
+
 function getSelectors(contract) {
   const signatures = Object.keys(contract.interface.functions);
   const selectors = signatures.reduce((acc, val) => {
@@ -66,21 +72,13 @@ async function initializeFeature(contractName, functionName, contractAddress, ar
 
 async function monitorDomainEvents(domainAddress) {
   const DomainContract = await ethers.getContractAt("Domain", domainAddress);
+  DomainContract.on("DelegateBefore", (selector, feature, functionSelector, data, event) => {
+      const hexString = data.slice(2); 
+      const asciiString = Buffer.from(hexString, 'hex').toString('ascii');
+      console.log(`${yellow}                 *** ${asciiString} - DelegateBefore Event Emitted on ${selector} to address ${feature} function ${functionSelector}${reset}`);
+  });
 
-  // DomainContract.on("LogDelegateBeforeCount", (hash, count, event) => {
-  //   console.log("LogDelegateBeforeCount Event Emitted:");
-  //   console.log("Hash: " + hash + " - Count: "+ count);
-  //   // Process event. For example, save it to a database or notify an external system.
-  // });  
 
-  // // Listen for DelegateBefore events
-  // DomainContract.on("DelegateBefore", (contractAddress, feature, functionSelector, data, event) => {
-  //     console.log("DelegateBefore Event Emitted:");
-  //     console.log("Contract Address:", contractAddress);
-  //     console.log("Feature:", feature);
-  //     console.log("Function Selector:", functionSelector);
-  //     // Process event. For example, save it to a database or notify an external system.
-  // });
 
   // // Listen for DelegateAfter events
   // DomainContract.on("DelegateAfter", (contractAddress, feature, functionSelector, data, event) => {
@@ -91,11 +89,11 @@ async function monitorDomainEvents(domainAddress) {
   //     // Process event. For example, save it to a database or notify an external system.
   // });
 
-  console.log(`Monitoring events for Domain contract at address ${domainAddress}...`);
+  console.log(`             -> Monitoring events for Domain contract at address ${domainAddress}...`);
 }
-
+let totalCost = ethers.BigNumber.from("0");
 async function main() {
-  let totalCost = ethers.BigNumber.from("0");
+
 let featureToAddressImplementation = {};
 const FeatureNames = [
     'FeatureStoreApp',
@@ -110,7 +108,10 @@ let coreBundleId = ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(['
 let featuresBundle;
 
   const [owner, admin] = await ethers.getSigners();
-
+  const Faucet = await ethers.getContractFactory('Faucet');
+  const faucet = await Faucet.deploy();
+  faucet.withdrawAll();
+  
   console.log("Deploying contracts with the account:", owner.address);
   
   const FeatureStoreApp = await ethers.getContractFactory("FeatureStoreApp");
@@ -236,7 +237,7 @@ let featuresBundle;
     monitorDomainEvents(addressPlugfyDomain);
 
     console.log(`   -> Genesis.Plugfy domain created: ${addressPlugfyDomain} at a cost of: ${costForCreateDomain} ETH`);
-    
+    totalCost = totalCost.add(ethers.utils.parseEther(await initializeFeature('AdminApp','_initAdminApp', addressPlugfyDomain, [])));
     totalCost = totalCost.add(ethers.utils.parseEther(await initializeFeature('ReentrancyGuardApp','_initReentrancyGuard', addressPlugfyDomain, [])));
 
 
@@ -257,7 +258,7 @@ let featuresBundle;
     await monitorDomainEvents(addressVickAiSubdomain);
     console.log(`       -> Genesis.Plugfy.VickAi subdomain created: ${addressVickAiSubdomain} at a cost of: ${costForCreateVickAi} ETH`);
     
-    
+    totalCost = totalCost.add(ethers.utils.parseEther(await initializeFeature('AdminApp','_initAdminApp', addressVickAiSubdomain, [])));
     totalCost = totalCost.add(ethers.utils.parseEther(await initializeFeature('ReentrancyGuardApp','_initReentrancyGuard', addressVickAiSubdomain, [])));
 
 
@@ -302,10 +303,13 @@ let featuresBundle;
         functionSelectors: getSelectors(erc20App)
     });
 
-    await vickAiDomainManagerFeature.createDomain(addressVickAiSubdomain, "TokenSeed", extensibleFeatures, vickSeedTokenArgs);
+    const createDomainTx2 = await vickAiDomainManagerFeature.createDomain(addressVickAiSubdomain, "TokenSeed", extensibleFeatures, vickSeedTokenArgs);
+    const costCreateDomainTx2 = await getTransactionCost(createDomainTx2);
+    totalCost = totalCost.add(ethers.utils.parseEther(costCreateDomainTx2));
     const addressVickAiTokenSeedDomain = await vickAiDomainManagerFeature.getDomainAddress(0); // Assuming index 2 because Genesis is at index 0 and Plugfy is at index 1
     await monitorDomainEvents(addressVickAiTokenSeedDomain);
-    console.log("           -> Genesis.Plugfy.VickAi.TokenSeed subdomain created: " + addressVickAiTokenSeedDomain);    
+    console.log(`           -> Genesis.Plugfy.VickAi.TokenSeed subdomain created: ` + addressVickAiTokenSeedDomain  +` at a cost of: ${costCreateDomainTx2} ETH`);
+    totalCost = totalCost.add(ethers.utils.parseEther(await initializeFeature('AdminApp','_initAdminApp', addressVickAiTokenSeedDomain, [])));
     console.log(`               -> ERC20 feature deployed: ${erc20App.address} at a cost of: ${costForERC20App} ETH`); 
 
 
@@ -319,11 +323,13 @@ let featuresBundle;
     //     totalCost = totalCost.add(ethers.utils.parseEther(costForSetGuard));
     //     console.log(`                 - Set Reentrancy Guard for function ${functionName} at a cost of: ${costForSetGuard} ETH`);
     // }    
+
     const vickAiERC20TokenSeedFeature = await ethers.getContractAt('ERC20App', addressVickAiTokenSeedDomain);
     totalCost = totalCost.add(ethers.utils.parseEther(await initializeFeature('ERC20App','_initERC20', vickAiERC20TokenSeedFeature.address, ["Vick Ai Seed", "VICK-S", 2500000000000000000000000n, 18])));
   
     const ReentranceGuardAppFeature = await ethers.getContractAt('ReentrancyGuardApp', addressVickAiTokenSeedDomain);
     totalCost = totalCost.add(ethers.utils.parseEther(await initializeFeature('ReentrancyGuardApp','_initReentrancyGuard', ReentranceGuardAppFeature.address, [])));
+
 
 
     // //Sending 10 ethers to the token address
@@ -347,7 +353,7 @@ let featuresBundle;
     console.log(`               -> DexApp feature deployed: ${dexApp.address} at a cost of: ${costForDexApp} ETH`);    
     const dexAppFeature = await ethers.getContractAt('DexApp', addressVickAiTokenSeedDomain);
 
-    const initDexTx = await dexAppFeature._initDex();
+    const initDexTx = await dexAppFeature._initDex("0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270");
     const costForDexInit = await getTransactionCost(initDexTx);
     totalCost = totalCost.add(ethers.utils.parseEther(costForDexInit));
     
@@ -356,7 +362,7 @@ let featuresBundle;
 
 
     const gatewayName = "VickAiGateway";
-    const onlyReceiveSwapTokenAddress = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"; // Defina o endereço adequado aqui.
+    const onlyReceiveSwapTokenAddress = "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270"; // Defina o endereço adequado aqui.
     const routers = [
       {
           name: "QuickSwap",
@@ -397,53 +403,145 @@ let featuresBundle;
     console.log(`                     -> Order created: Amount: ${amount}, Price: ${price}, Burned on close: ${tokenBurnedOnClose}, Cost: ${costForOrderCreation} ETH`);
   }
 
-
   // Create purchase orders based on provided information
-  await _createPurchOrder(true, ethers.utils.parseUnits("256800.00", 18), ethers.utils.parseUnits("0.200000", 18), destination, ethers.utils.parseUnits("12840.00", 18));
-  await _createPurchOrder(true, ethers.utils.parseUnits("311261.82", 18), ethers.utils.parseUnits("0.223030", 18), destination, ethers.utils.parseUnits("31126.18", 18));
-  await _createPurchOrder(true, ethers.utils.parseUnits("251118.75", 18), ethers.utils.parseUnits("0.259800", 18), destination, ethers.utils.parseUnits("37667.81", 18));
-  await _createPurchOrder(true, ethers.utils.parseUnits("358291.38", 18), ethers.utils.parseUnits("0.300590", 18), destination, ethers.utils.parseUnits("71658.28", 18));
-  await _createPurchOrder(true, ethers.utils.parseUnits("228874.07", 18), ethers.utils.parseUnits("0.392710", 18), destination, ethers.utils.parseUnits("68662.22", 18));
-  await _createPurchOrder(true, ethers.utils.parseUnits("266026.95", 18), ethers.utils.parseUnits("0.495810", 18), destination, ethers.utils.parseUnits("106410.78", 18));
+  await _createPurchOrder(true, ethers.utils.parseUnits("44500.00", 18), ethers.utils.parseUnits("0.200000", 18), destination, ethers.utils.parseUnits("12840.00", 18));
+  await _createPurchOrder(false, ethers.utils.parseUnits("211800.00", 18), ethers.utils.parseUnits("0.200000", 18), destination, 0);
+  await _createPurchOrder(false, ethers.utils.parseUnits("311261.82", 18), ethers.utils.parseUnits("0.223030", 18), destination, ethers.utils.parseUnits("31126.18", 18));
+  await _createPurchOrder(false, ethers.utils.parseUnits("251118.75", 18), ethers.utils.parseUnits("0.259800", 18), destination, ethers.utils.parseUnits("37667.81", 18));
+  await _createPurchOrder(false, ethers.utils.parseUnits("358291.38", 18), ethers.utils.parseUnits("0.300590", 18), destination, ethers.utils.parseUnits("71658.28", 18));
+  await _createPurchOrder(false, ethers.utils.parseUnits("228874.07", 18), ethers.utils.parseUnits("0.392710", 18), destination, ethers.utils.parseUnits("68662.22", 18));
+  await _createPurchOrder(false, ethers.utils.parseUnits("266026.95", 18), ethers.utils.parseUnits("0.495810", 18), destination, ethers.utils.parseUnits("106410.78", 18));
 
- // Calculate the required amount of USDC for purchasing 1000 Vick-S tokens
- const purchaseAmount = ethers.utils.parseUnits('300000', 18); 
- const requiredUSDC = purchaseAmount.mul(ethers.utils.parseUnits('0.300000', 6)).div(ethers.utils.parseUnits('1', 18)); // Assuming 0.495810 USDC per Vick-S token from the last purchase order
 
- // Approve the DEX contract to spend the required amount of USDC on behalf of the Admin
- const USDCContract = await ethers.getContractAt('IERC20', '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'); // The address of USDC
- const approveTx2 = await USDCContract.connect(admin).approve(vickAiERC20TokenSeedFeature.address, requiredUSDC);
- await approveTx.wait();
- const costForApproval2 = await getTransactionCost(approveTx2);
- totalCost = totalCost.add(ethers.utils.parseEther(costForApproval));
- console.log(`                     -> Approved DexApp to spend ${requiredUSDC} USDC at a cost of: ${costForApproval2} ETH`);
+  const addAirDropAmount = await dexAppFeature.addAirDropAmount(gatewayId, dexAppFeature.address, ethers.utils.parseUnits("450000", 18));
+  await addAirDropAmount.wait();
+  const costaddAirDropAmount = await getTransactionCost(addAirDropAmount);
+  totalCost = totalCost.add(ethers.utils.parseEther(costaddAirDropAmount));
+  console.log(`                   -> Added 400000 VICK-S for Airdrop at a cost of: ${costaddAirDropAmount} ETH`);
 
- // Purchase 1000 Vick-S tokens using USDC from the Admin account
- const purchaseTx = await dexAppFeature.connect(admin).swapToken(
-     gatewayId,
-     vickAiERC20TokenSeedFeature.address,
-     "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174", // USDC as the input token
-     requiredUSDC,
-     admin.address, // tokens will be sent to the admin address
-     ethers.constants.AddressZero // No airdrop
- );
- await purchaseTx.wait();
- const costForPurchase = await getTransactionCost(purchaseTx);
- totalCost = totalCost.add(ethers.utils.parseEther(costForPurchase));
- console.log(`                     -> Admin purchased 1000 Vick-S tokens at a cost of: ${costForPurchase} ETH`);
+
+
+  const addAirDropFactor1 = await dexAppFeature.setAirdropFactor(gatewayId, vickAiERC20TokenSeedFeature.address, ethers.utils.parseUnits("100", 18), ethers.utils.parseUnits("10", 18));
+  await addAirDropFactor1.wait();
+  const costaddAirDropFactor1 = await getTransactionCost(addAirDropFactor1);
+  totalCost = totalCost.add(ethers.utils.parseEther(costaddAirDropFactor1));
+  console.log(`                   -> Added base 100 VICK-S for factor 10 on Airdrop at a cost of: ${costaddAirDropFactor1} ETH`);
+
+  const addAirDropFactor2 = await dexAppFeature.setAirdropFactor(gatewayId, vickAiERC20TokenSeedFeature.address, ethers.utils.parseUnits("250", 18), ethers.utils.parseUnits("8", 18));
+  await addAirDropFactor2.wait();
+  const costaddAirDropFactor2 = await getTransactionCost(addAirDropFactor2);
+  totalCost = totalCost.add(ethers.utils.parseEther(costaddAirDropFactor2));
+  console.log(`                   -> Added base 250 VICK-S for factor 8 on Airdrop at a cost of: ${costaddAirDropFactor2} ETH`);
+  
+  const addAirDropFactor3 = await dexAppFeature.setAirdropFactor(gatewayId, vickAiERC20TokenSeedFeature.address, ethers.utils.parseUnits("500", 18), ethers.utils.parseUnits("6", 18));
+  await addAirDropFactor3.wait();
+  const costaddAirDropFactor3 = await getTransactionCost(addAirDropFactor3);
+  totalCost = totalCost.add(ethers.utils.parseEther(costaddAirDropFactor3));
+  console.log(`                   -> Added base 500 VICK-S for factor 6 on Airdrop at a cost of: ${costaddAirDropFactor3} ETH`);
+  
+  const addAirDropFactor4 = await dexAppFeature.setAirdropFactor(gatewayId, vickAiERC20TokenSeedFeature.address, ethers.utils.parseUnits("1000", 18), ethers.utils.parseUnits("4", 18));
+  await addAirDropFactor4.wait();
+  const costaddAirDropFactor4 = await getTransactionCost(addAirDropFactor4);
+  totalCost = totalCost.add(ethers.utils.parseEther(costaddAirDropFactor4));
+  console.log(`                   -> Added base 1000 VICK-S for factor 4 on Airdrop at a cost of: ${costaddAirDropFactor4} ETH`);  
+
+//  // Calculate the required amount of USDC for purchasing 1000 Vick-S tokens
+//  const purchaseAmount = ethers.utils.parseUnits('1000.00', 18); 
+//  const requiredUSDC = purchaseAmount.mul(ethers.utils.parseUnits('0.010000', 6)).div(ethers.utils.parseUnits('1', 18)); // Assuming 0.495810 USDC per Vick-S token from the last purchase order
+
+//  //Approve the DEX contract to spend the required amount of USDC on behalf of the Admin
+//  const USDCContract = await ethers.getContractAt('IERC20', '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'); // The address of USDC
+//  const approveTx2 = await USDCContract.connect(admin).approve(vickAiERC20TokenSeedFeature.address, requiredUSDC);
+//  await approveTx.wait();
+//  const costForApproval2 = await getTransactionCost(approveTx2);
+//  totalCost = totalCost.add(ethers.utils.parseEther(costForApproval));
+//  console.log(`                     -> Approved DexApp to spend ${requiredUSDC} USDC at a cost of: ${costForApproval2} ETH`);
+
+
+//  //Purchase 1000 Vick-S tokens using USDC from the Admin account
+//  const purchaseTx = await dexAppFeature.connect(admin).swapToken(
+//      gatewayId,
+//      vickAiERC20TokenSeedFeature.address,
+//      "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174", // USDC as the input token
+//      requiredUSDC,
+//      admin.address, // tokens will be sent to the admin address
+//      ethers.constants.AddressZero // No airdrop
+//  );
+//  await purchaseTx.wait();
+//  const costForPurchase = await getTransactionCost(purchaseTx);
+//  totalCost = totalCost.add(ethers.utils.parseEther(costForPurchase));
+//  console.log(`                     -> Admin purchased 1000 Vick-S tokens at a cost of: ${costForPurchase} ETH`);
     
-    //const sendTokensTx2 = await vickAiERC20TokenSeedFeature.connect(admin).transfer(owner.address, ethers.utils.parseUnits('10', 18));  // assuming 18 decimals
-    //await sendTokensTx2.wait();
-    //const costForTokenTransfer2 = await getTransactionCost(sendTokensTx2);
-    //totalCost = totalCost.add(ethers.utils.parseEther(costForTokenTransfer2));
-    //console.log(`                   -> Sent 10 VICK-S to owner address: ${owner.address} at a cost of: ${costForTokenTransfer2} ETH`);
 
-    console.log(`\n\nTotal cost for all transactions: ${ethers.utils.formatEther(totalCost)} ETH`);
+    // const WMaticContract = await ethers.getContractAt('IERC20', '0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270'); // The address of Wmatic
+    // const approveWMATICTx2 = await WMaticContract.connect(admin).approve(vickAiERC20TokenSeedFeature.address, ethers.utils.parseEther('1000'));
+    // await approveWMATICTx2.wait();
+    // const costForApprovalWMATIC2 = await getTransactionCost(approveWMATICTx2);
+    // totalCost = totalCost.add(ethers.utils.parseEther(costForApprovalWMATIC2));
+    // console.log(`                     -> Approved DexApp ${ethers.utils.parseEther('10')} WMATIC a cost of: ${costForApprovalWMATIC2} ETH`);
+
+ //Purchase 1000 Vick-S tokens using USDC from the Admin account
+//  const purchaseTx = await dexAppFeature.connect(admin).swapToken(
+//      gatewayId,
+//      vickAiERC20TokenSeedFeature.address,
+//      "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270", // USDC as the input token
+//      ethers.utils.parseEther('1000'),
+//      admin.address, // tokens will be sent to the admin address
+//      ethers.constants.AddressZero // No airdrop
+//  );
+//  await purchaseTx.wait();
+//  const costForPurchase = await getTransactionCost(purchaseTx);
+//  totalCost = totalCost.add(ethers.utils.parseEther(costForPurchase));
+//  console.log(`                     -> Admin purchased 1000 Vick-S tokens at a cost of: ${costForPurchase} ETH`);
+
+// const quotes = await dexAppFeature.connect(admin).getSwapQuote(gatewayId, "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270", ethers.utils.parseEther('1000'));
+// if (!quotes || quotes.length === 0) {
+//     throw new Error('No quotes returned');
+// }
+// const firstQuote = quotes[0];
+
+// // Log os detalhes da cotação
+// console.log(`-> Quote ${ethers.utils.formatEther(firstQuote.tokenInAmount)} Native to ${ethers.utils.formatEther(firstQuote.receiveTokenAmount)} VICK-S`);
+let currentVickSOwnerBalance = await vickAiERC20TokenSeedFeature.balanceOf(owner.address);
+  const swapTx = await dexAppFeature.connect(admin).swapNativeToken(gatewayId, vickAiERC20TokenSeedFeature.address, owner.address, {
+      value: ethers.utils.parseEther('4450')
+  });
+  await swapTx.wait();
+  
+   const costForSwap = await getTransactionCost(swapTx);
+   totalCost = totalCost.add(ethers.utils.parseEther(costForSwap));
+   let balanceAdmin = await vickAiERC20TokenSeedFeature.balanceOf(admin.address);
+   console.log(`                   -> Swap ${ethers.utils.parseEther('4450')} Native to ${balanceAdmin} VICK-S at a cost of: ${costForSwap} ETH`);
+  
+  // const sendTokensTx2 = await vickAiERC20TokenSeedFeature.connect(admin).transfer(owner.address, ethers.utils.parseEther('500'));  // assuming 18 decimals
+  // await sendTokensTx2.wait();
+  // const costForTokenTransfer2 = await getTransactionCost(sendTokensTx2);
+  // totalCost = totalCost.add(ethers.utils.parseEther(costForTokenTransfer2));
+  // console.log(`                   -> Sent 500 VICK-S to owner address: ${owner.address} at a cost of: ${costForTokenTransfer2} ETH`);
+
+
+   const swapTx2 = await dexAppFeature.connect(admin).swapNativeToken(gatewayId, vickAiERC20TokenSeedFeature.address, owner.address, {
+    value: ethers.utils.parseEther('4450')
+});
+await swapTx2.wait();
+
+ const costForSwap2 = await getTransactionCost(swapTx2);
+ totalCost = totalCost.add(ethers.utils.parseEther(costForSwap2));
+ let balanceAdmin2 = await vickAiERC20TokenSeedFeature.balanceOf(admin.address);
+ console.log(`                   -> Swap ${ethers.utils.parseEther('4450')} Native to ${balanceAdmin2} VICK-S and indicate Owner to airdrop at a cost of: ${costForSwap2} ETH`);
+
+
+
+  balanceOwner = await vickAiERC20TokenSeedFeature.balanceOf(owner.address);
+  console.log(`                   -> Earned ${balanceOwner - currentVickSOwnerBalance} VICK-S at airdrop indication`);
+
+  console.log(`\n\nTotal cost for all transactions: ${ethers.utils.formatEther(totalCost)} ETH`);
 }
 
 main()
   .then(() => process.exit(0))
   .catch(error => {
+    console.log(`\n\nTotal cost for all transactions: ${ethers.utils.formatEther(totalCost)} ETH`);
     console.error(error);
     process.exit(1);
   });

@@ -282,6 +282,7 @@ library LibDomain {
     }
 
     function addOrUpdateDelegateBefore(bytes4 functionSelector, address delegateAddress, bytes memory data) internal {
+        enforceIsContractOwnerAdmin();
         if(delegateAddress == address(this) || delegateAddress == address(0)){
             delegateAddress = domainStorage().featureAddressAndSelectorPosition[functionSelector].featureAddress;
         }
@@ -309,32 +310,32 @@ library LibDomain {
         }
     }
 
-    function addOrUpdateDelegateAfter(bytes4 functionSelector, address delegateAddress, bytes memory data) internal {
-        if(delegateAddress == address(this) || delegateAddress == address(0)){
-            delegateAddress = domainStorage().featureAddressAndSelectorPosition[functionSelector].featureAddress;
-        }
+    // function addOrUpdateDelegateAfter(bytes4 functionSelector, address delegateAddress, bytes memory data) internal {
+    //     if(delegateAddress == address(this) || delegateAddress == address(0)){
+    //         delegateAddress = domainStorage().featureAddressAndSelectorPosition[functionSelector].featureAddress;
+    //     }
         
-        bool updated = false;
-        for (uint i = 0; i < domainStorage().delegatesAfterCount; i++) {
-            if (domainStorage().delegatesAfter[i].selector == functionSelector) {
-                domainStorage().delegatesAfter[i].callToAddress = delegateAddress;
-                domainStorage().delegatesAfter[i].data = data;
-                domainStorage().delegatesAfter[i].disabled = false;
-                updated = true;
-                break;
-            }
-        }
+    //     bool updated = false;
+    //     for (uint i = 0; i < domainStorage().delegatesAfterCount; i++) {
+    //         if (domainStorage().delegatesAfter[i].selector == functionSelector) {
+    //             domainStorage().delegatesAfter[i].callToAddress = delegateAddress;
+    //             domainStorage().delegatesAfter[i].data = data;
+    //             domainStorage().delegatesAfter[i].disabled = false;
+    //             updated = true;
+    //             break;
+    //         }
+    //     }
 
-        if (!updated) {
-            domainStorage().delegatesAfter.push(DelegateSelector({
-                selector: functionSelector,
-                callToAddress: delegateAddress,
-                data: data,
-                disabled: false
-            }));
-            domainStorage().delegatesAfterCount++;
-        }
-    }
+    //     if (!updated) {
+    //         domainStorage().delegatesAfter.push(DelegateSelector({
+    //             selector: functionSelector,
+    //             callToAddress: delegateAddress,
+    //             data: data,
+    //             disabled: false
+    //         }));
+    //         domainStorage().delegatesAfterCount++;
+    //     }
+    // }
 
     function removeDelegateBefore(bytes4 functionSelector) internal {
         for (uint i = 0; i < domainStorage().delegatesBeforeCount; i++) {
@@ -347,16 +348,16 @@ library LibDomain {
         }
     }
 
-    function removeDelegateAfter(bytes4 functionSelector) internal {
-        for (uint i = 0; i < domainStorage().delegatesAfterCount; i++) {
-            if (domainStorage().delegatesAfter[i].selector == functionSelector) {
-                domainStorage().delegatesAfter[i] = domainStorage().delegatesAfter[domainStorage().delegatesAfterCount - 1];
-                domainStorage().delegatesAfter.pop();
-                domainStorage().delegatesAfterCount--;
-                break;
-            }
-        }
-    }
+    // function removeDelegateAfter(bytes4 functionSelector) internal {
+    //     for (uint i = 0; i < domainStorage().delegatesAfterCount; i++) {
+    //         if (domainStorage().delegatesAfter[i].selector == functionSelector) {
+    //             domainStorage().delegatesAfter[i] = domainStorage().delegatesAfter[domainStorage().delegatesAfterCount - 1];
+    //             domainStorage().delegatesAfter.pop();
+    //             domainStorage().delegatesAfterCount--;
+    //             break;
+    //         }
+    //     }
+    // }
 
     function disableDelegateBefore(bytes4 functionSelector) internal {
         for (uint i = 0; i < domainStorage().delegatesBeforeCount; i++) {
@@ -367,14 +368,14 @@ library LibDomain {
         }
     }
 
-    function disableDelegateAfter(bytes4 functionSelector) internal {
-        for (uint i = 0; i < domainStorage().delegatesAfterCount; i++) {
-            if (domainStorage().delegatesAfter[i].selector == functionSelector) {
-                domainStorage().delegatesAfter[i].disabled = true;
-                break;
-            }
-        }
-    }
+    // function disableDelegateAfter(bytes4 functionSelector) internal {
+    //     for (uint i = 0; i < domainStorage().delegatesAfterCount; i++) {
+    //         if (domainStorage().delegatesAfter[i].selector == functionSelector) {
+    //             domainStorage().delegatesAfter[i].disabled = true;
+    //             break;
+    //         }
+    //     }
+    // }
 
     function positionDelegateBefore(uint oldIndex, uint newIndex) internal {
         require(oldIndex < domainStorage().delegatesBeforeCount, "Invalid old index");
@@ -385,12 +386,12 @@ library LibDomain {
         domainStorage().delegatesBefore[newIndex] = temp;
     }
 
-    function positionDelegateAfter(uint oldIndex, uint newIndex) internal {
-        require(oldIndex < domainStorage().delegatesAfterCount, "Invalid old index");
-        require(newIndex < domainStorage().delegatesAfterCount, "Invalid new index");
+    // function positionDelegateAfter(uint oldIndex, uint newIndex) internal {
+    //     require(oldIndex < domainStorage().delegatesAfterCount, "Invalid old index");
+    //     require(newIndex < domainStorage().delegatesAfterCount, "Invalid new index");
 
-        DelegateSelector memory temp = domainStorage().delegatesAfter[oldIndex];
-        domainStorage().delegatesAfter[oldIndex] = domainStorage().delegatesAfter[newIndex];
-        domainStorage().delegatesAfter[newIndex] = temp;
-    }
+    //     DelegateSelector memory temp = domainStorage().delegatesAfter[oldIndex];
+    //     domainStorage().delegatesAfter[oldIndex] = domainStorage().delegatesAfter[newIndex];
+    //     domainStorage().delegatesAfter[newIndex] = temp;
+    // }
 }

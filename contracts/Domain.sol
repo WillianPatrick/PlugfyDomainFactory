@@ -13,7 +13,8 @@ struct DomainArgs {
 }
 
 contract Domain {
-    error ReentrancyGuardLock(uint256 domainLocks, uint256 featureLocks);
+    error ReentrancyGuardLock(uint256 domainLocks, uint256 featureLocks, uint256 functinLocks, uint256 senderLocks);
+    event DelegateBefore(bytes4 selector, address feature, bytes4 functionSelector, bytes data);
 
     constructor(
         address _parentDomain,
@@ -62,6 +63,16 @@ contract Domain {
             revert LibDomain.FunctionNotFound(functionSelector);
         }
 
+        require(!ds.paused || ds.superAdmin == msg.sender || ds.contractOwner == msg.sender, "This domain is currently paused and is not in operation");
+
+        if (ds.functionRoles[functionSelector] != bytes32(0)) {
+            if(!ds.accessControl[ds.functionRoles[functionSelector]][msg.sender] && ds.superAdmin != msg.sender && ds.contractOwner != msg.sender){
+                revert("Sender does not have access to this function");
+            }
+        }
+        
+        require(!ds.pausedFeatures[feature] || ds.superAdmin == msg.sender || ds.contractOwner == msg.sender, "This feature and functions are currently paused and not in operation");        
+
         bytes32 domainGuardKey = keccak256(abi.encodePacked("domainGlobalReentrancyGuardEnabled"));
         bytes32 featureGuardKey = keccak256(abi.encodePacked(feature, "featuresReentrancyGuardEnabled"));
         bytes32 functionGuardKey = keccak256(abi.encodePacked(functionSelector,"functionsReentrancyGuardEnabled"));
@@ -72,35 +83,6 @@ contract Domain {
         bytes32 senderGuardLock = keccak256(abi.encodePacked(msg.sender, "senderReentrancyGuardLock"));
 
         bytes4 errorSelector = Domain.ReentrancyGuardLock.selector;
-
-        bytes32 delegatesBeforeCountSlot = keccak256(abi.encodePacked(LibDomain.DOMAIN_STORAGE_POSITION, uint256(21))); 
-        bytes32 delegatesBeforeSlot = keccak256(abi.encodePacked(LibDomain.DOMAIN_STORAGE_POSITION, uint256(22)));
-        bytes32 delegatesAfterCountSlot = keccak256(abi.encodePacked(LibDomain.DOMAIN_STORAGE_POSITION, uint256(23)));
-        bytes32 delegatesAfterSlot = keccak256(abi.encodePacked(LibDomain.DOMAIN_STORAGE_POSITION, uint256(24)));
-
-        for (uint i = 0; i < ds.delegatesBeforeCount; i++) {
-            LibDomain.DelegateSelector memory delegateBefore = ds.delegatesBefore[i];
-            if (delegateBefore.selector == functionSelector || delegateBefore.disabled) {
-                continue;
-            }
-            
-            bytes memory encodedData = abi.encodeWithSelector(delegateBefore.selector, feature, functionSelector, delegateBefore.data);
-            address callToAddress = delegateBefore.callToAddress;
-            bool success;
-            bytes memory resultData;
-            uint256 rSize;
-            assembly {
-                let dataStart := add(encodedData, 0x20) 
-                let dataSize := mload(encodedData)
-                success := delegatecall(gas(), callToAddress, dataStart, dataSize, 0, 0)
-                rSize := returndatasize()
-                resultData := mload(0x40) 
-                returndatacopy(resultData, 0, rSize)
-                if iszero(success) {
-                    revert(resultData, rSize)
-                }
-            }
-        }
 
         assembly {
             let isDomainReentrancyGuardEnabled := sload(add(ds.slot, domainGuardKey))
@@ -136,18 +118,14 @@ contract Domain {
                     or(
                         or(
                             and(
-                                iszero(
-                                    eq(sload(add(ds.slot, domainGuardLock)), 0)
-                                ),
+                                iszero(eq(sload(add(ds.slot, domainGuardLock)), 0)),
                                 and(
                                     isDomainReentrancyGuardEnabled,
                                     isFunctionReentrancyGuardEnabled
                                 )
                             ),
                             and(
-                                iszero(
-                                    eq(sload(add(ds.slot, featureGuardLock)), 0)
-                                ),
+                                iszero(eq(sload(add(ds.slot, featureGuardLock)), 0)),
                                 and(
                                     isFeatureReentrancyGuardEnabled,
                                     and(
@@ -158,11 +136,9 @@ contract Domain {
                             )
                         ),
                         and(
-                            iszero(
-                                eq(sload(add(ds.slot, functionGuardLock)), 0)
-                            ),
+                            iszero(eq(sload(add(ds.slot, functionGuardLock)), 0)),
                             and(
-                            isFunctionReentrancyGuardEnabled,
+                                isFunctionReentrancyGuardEnabled,
                                 iszero(isFeatureReentrancyGuardEnabled)
                                )
                         )
@@ -172,11 +148,13 @@ contract Domain {
                         iszero(eq(sload(add(ds.slot, senderGuardLock)), 0))
                     )
                 ) {
-                    let ptr := mload(0x40)
-                    mstore(ptr, errorSelector)
-                    mstore(add(ptr, 0x04), sload(add(ds.slot, domainGuardLock)))
-                    mstore(add(ptr, 0x24),sload(add(ds.slot, featureGuardLock)))
-                    revert(ptr, 0x44)
+                    let ptr := mload(0x40)  // Obtem o ponteiro de memória livre
+                    mstore(ptr, errorSelector)  // Armazena o seletor de erro no início da memória
+                    mstore(add(ptr, 0x04), sload(add(ds.slot, domainGuardLock)))  // Armazena o primeiro valor uint256
+                    mstore(add(ptr, 0x24), sload(add(ds.slot, featureGuardLock)))  // Armazena o segundo valor uint256
+                    mstore(add(ptr, 0x44), sload(add(ds.slot, functionGuardLock)))  // Armazena o terceiro valor uint256
+                    mstore(add(ptr, 0x64), sload(add(ds.slot, senderGuardLock)))  // Armazena o quarto valor uint256
+                    revert(ptr, 0x84)  // Reverte com todos os dados
                 }
                 if and(isDomainReentrancyGuardEnabled,isFunctionReentrancyGuardEnabled) {
                     sstore(add(ds.slot, domainGuardLock),add(sload(add(ds.slot, domainGuardLock)), 1))
@@ -195,7 +173,7 @@ contract Domain {
             calldatacopy(0, 0, calldatasize())
             let result := delegatecall(gas(), feature, 0, calldatasize(), 0, 0)
             let rSize := returndatasize()
-            let resultData := mload(0x40) // get free memory pointer to store the result data
+            let resultData := mload(0x40)
             returndatacopy(0, 0, rSize)
 
             if shouldLock {

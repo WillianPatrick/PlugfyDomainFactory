@@ -21,14 +21,19 @@ const config: HardhatUserConfig = {
   },
   networks: {
     hardhat: {
-        blockGasLimit: 60000000 // Network block gasLimit
+      allowUnlimitedContractSize: false,
+      blockGasLimit: 20000000, // 20 million
+      forking: {
+          url:"https://polygon-mainnet.g.alchemy.com/v2/-g7gWDApXuj5PDlZiwbo1w0-yvV0luSE",
+      },    
+    
     },    
     buildbear: {
       //chainId: 10792,
-      url: `https://rpc.buildbear.io/fuzzy-jek-tono-porkins-c6f23a4b`,
+      url: `https://rpc.buildbear.io/interim-lando-calrissian-26a843bb`,
       accounts: [process.env.PRIVATE_KEYOWNER,process.env.PRIVATE_KEYADMIN],  
-      gasPrice: 20000000000,
-      gas: 6000000,
+      //gasPrice: 200000000000,
+      //gas: 6000000,
     }    
   },
 };
