@@ -123,10 +123,14 @@ contract AdminApp is IAdminApp {
         ds.functionRoles[functionSelector] = role;
     }
 
-    function removeFunctionRole(bytes4 functionSelector) public {
+    function removeFunctionRole(bytes4 functionSelector, bool noErrors) public {
         LibDomain.DomainStorage storage ds = LibDomain.domainStorage();
-        require(hasRole(ds.roleAdmins[ds.functionRoles[functionSelector]], msg.sender), "AccessControl: sender must be an admin to remove role");
-        delete ds.functionRoles[functionSelector];
+        if(!noErrors){
+            require(hasRole(ds.roleAdmins[ds.functionRoles[functionSelector]], msg.sender), "AccessControl: sender must be an admin to remove role");
+        }
+        if(hasRole(ds.roleAdmins[ds.functionRoles[functionSelector]], msg.sender)){
+            delete ds.functionRoles[functionSelector];
+        }
     }    
 
     function pauseDomain()  public onlyRole(PAUSER_ROLE)  {

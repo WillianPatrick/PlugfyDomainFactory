@@ -9,9 +9,16 @@ library LibDomainManager {
     bytes32 constant DOMAIN_STORAGE_POSITION = keccak256("domain.manager.standard.storage");
 
     struct DomainStorage{
-        address owner;
         address[] domains;
+        mapping(address => uint256) domainsIdx;
         bool initialized;
+        address[] domainWhiteListTokens;  
+        mapping(address => uint256) domainWhiteListTokensIdx;   
+        address[] domainBlackListTokens; 
+        mapping(address => uint256) domainBlackListTokensIdx;
+        address[] domainWhiteListAccount;        
+        mapping(address => uint256) domainWhiteListAccountIdx;        
+        address[] domainBlackListAccount;      
     }
 
     function domainStorage() internal pure returns (DomainStorage storage ds) {
@@ -43,6 +50,7 @@ contract DomainManagerApp  {
         LibDomainManager.DomainStorage storage ds = LibDomainManager.domainStorage();
         _args.owner = _args.owner == address(0) ? msg.sender : _args.owner;
         Domain domain = new Domain(_parentDomain, _domainName, _features, _args);
+        ds.domainsIdx[address(domain)] = ds.domains.length;
         ds.domains.push(address(domain));
 
         IAdminApp(address(domain)).setRoleAdmin(LibDomainManager.DEFAULT_ADMIN_ROLE, LibDomainManager.DEFAULT_ADMIN_ROLE);

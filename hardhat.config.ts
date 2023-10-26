@@ -25,17 +25,23 @@ const config: HardhatUserConfig = {
       blockGasLimit: 20000000, // 20 million
       forking: {
           url:"https://polygon-mainnet.g.alchemy.com/v2/-g7gWDApXuj5PDlZiwbo1w0-yvV0luSE",
-      },    
-    
+      }
     },    
     buildbear: {
-      //chainId: 10792,
-      url: `https://rpc.buildbear.io/interim-lando-calrissian-26a843bb`,
+      chainId: 10792,
+      url: `https://rpc.buildbear.io/fuzzy-jek-tono-porkins-c6f23a4b`,
       accounts: [process.env.PRIVATE_KEYOWNER,process.env.PRIVATE_KEYADMIN],  
-      //gasPrice: 200000000000,
+      gasPrice: 30000000000,
       //gas: 6000000,
-    }    
-  },
+    }, 
+    buildbear2: {
+      chainId: 12018,
+      url: `https://rpc.buildbear.io/bloody-dooku-346909c4`,
+      accounts: [process.env.PRIVATE_KEYOWNER,process.env.PRIVATE_KEYADMIN],  
+      gasPrice: 30000000000,
+      //gas: 6000000,
+    }  
+  }
 };
 
 export default config;

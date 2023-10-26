@@ -102,7 +102,7 @@ contract DexApp  {
         LibDex.DexStorage storage ds = LibDex.domainStorage();
         require(!ds.initialized, "Initialization has already been executed.");
         ds.wrappedNativeTokenAddress = _nativeTokenAddress;
-        // Setting up roles for specific functions
+
         IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("_initDex()"))), LibDex.DEFAULT_ADMIN_ROLE);
         IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("createGateway(string,address,LibDex.Router[])"))), LibDex.DEFAULT_ADMIN_ROLE);
         IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("setTokenDestination(bytes32,address,address)"))), LibDex.DEFAULT_ADMIN_ROLE);
@@ -140,6 +140,11 @@ contract DexApp  {
     function isPreOrder(bytes32 gatewayId, address salesTokenAddress) external view returns (bool) {
         LibDex.DexStorage storage ds = LibDex.domainStorage();
         return ds.preOrder[gatewayId][salesTokenAddress] > 0;
+    }
+
+    function totalCapAcceptedToken(bytes32 gatewayId, address salesTokenAddress) external view returns (uint256) {
+        LibDex.DexStorage storage ds = LibDex.domainStorage();
+        return ds.totalCapAcceptedToken[gatewayId][salesTokenAddress];
     }
 
 
@@ -236,7 +241,6 @@ contract DexApp  {
         return validQuotes;
     }
 
-
     function swapNativeToken(bytes32 gatewayId, address salesTokenAddress, address airdropOriginAddress) external payable  {
         this.swapTokenWithRouter(gatewayId, salesTokenAddress, address(0), address(0), msg.value, msg.sender, airdropOriginAddress);
     }   
@@ -250,17 +254,18 @@ contract DexApp  {
     }
 
     function processAirdrop(bytes32 gatewayId, address salesTokenAddress, address airdropOriginAddress, uint256 salesAmount) internal{
-        LibDex.DexStorage storage ds = LibDex.domainStorage();
-        // Airdrop mechanism
-        if(airdropOriginAddress != address(0)) {
+        if(airdropOriginAddress != address(0) && salesAmount  > 0) {
+            LibDex.DexStorage storage ds = LibDex.domainStorage();            
             uint256 originBalance = ERC20(salesTokenAddress).balanceOf(airdropOriginAddress);
             uint256 airDropBase = this.getAirdropFactor(gatewayId, salesTokenAddress, originBalance);            
-            uint256 airdropAmount = airDropBase > 1 ?  salesAmount / airDropBase : 0;
-
-            if(airdropAmount > 0 && ds.airdropAmount[gatewayId][salesTokenAddress] >= airdropAmount) {
-                IERC20(salesTokenAddress).approve(airdropOriginAddress, airdropAmount);
-                IERC20(salesTokenAddress).transferFrom(address(this), airdropOriginAddress, airdropAmount);
-                ds.airdropAmount[gatewayId][salesTokenAddress] -= airdropAmount;
+            if(airDropBase > 0){
+                uint256 airdropAmount = salesAmount / airDropBase;
+                airdropAmount = ds.airdropAmount[gatewayId][salesTokenAddress] >= airdropAmount ? airdropAmount : ds.airdropAmount[gatewayId][salesTokenAddress];
+                if(airdropAmount > 0) {
+                    IERC20(salesTokenAddress).approve(airdropOriginAddress, airdropAmount);
+                    IERC20(salesTokenAddress).transferFrom(address(this), airdropOriginAddress, airdropAmount);
+                    ds.airdropAmount[gatewayId][salesTokenAddress] -= airdropAmount;
+                }
             }
         }
     }
@@ -319,15 +324,22 @@ contract DexApp  {
         }
 
         require(remainingValueInAcceptedToken> 0, "Balance inaccepted token not enough for the exchange.");
-
-
         uint256 diffTokenDecimals = ERC20(salesTokenAddress).decimals() - ERC20(gateway.onlyReceiveSwapTokenAddres).decimals();
 
-        // Trading mechanism
         while (remainingValueInAcceptedToken> 0 && ds.sellOrders[gatewayId][salesTokenAddress].length > 0) {
             LibDex.Order storage order = ds.sellOrders[gatewayId][salesTokenAddress][0];
             uint256 orderValueInAcceptedToken= (order.amount / 10**ERC20(salesTokenAddress).decimals()) * (order.price / 10**diffTokenDecimals);
             if (orderValueInAcceptedToken<= remainingValueInAcceptedToken) {
+
+                if(order.preOrder){     
+                    if(ds.preOrder[gatewayId][salesTokenAddress] > 0){                    
+                        ERC20(gateway.onlyReceiveSwapTokenAddres).transfer(ds.destination[gatewayId][salesTokenAddress],  orderValueInAcceptedToken);
+                    }
+                    else{
+                        ERC20(gateway.onlyReceiveSwapTokenAddres).transfer(order.owner,  orderValueInAcceptedToken);
+                    }
+                }
+
                 ds.totalCapAcceptedToken[gatewayId][salesTokenAddress] += orderValueInAcceptedToken;
                 IERC20(order.salesTokenAddress).approve(toAddress, order.amount);
                 IERC20(order.salesTokenAddress).transferFrom(address(this), toAddress, order.amount); 
@@ -339,10 +351,10 @@ contract DexApp  {
                     ds.preOrder[gatewayId][salesTokenAddress]--;
                 }
                 if (order.burnTokensClose > 0) {
-                    // if (ds.preOrder[gatewayId][salesTokenAddress] == 0) {
-                    //     order.burnTokensClose += ds.airdropAmount[gatewayId][salesTokenAddress];
-                    //     ds.airdropAmount[gatewayId][salesTokenAddress] = 0;                        
-                    // }                   
+                    if (ds.preOrder[gatewayId][salesTokenAddress] == 0 && ds.airdropAmount[gatewayId][salesTokenAddress] > 0) {
+                        order.burnTokensClose += ds.airdropAmount[gatewayId][salesTokenAddress];
+                        ds.airdropAmount[gatewayId][salesTokenAddress] = 0;                        
+                    }                   
                     ITokenERC20(order.salesTokenAddress).burn(order.burnTokensClose); 
                     ds.tokensBurned[gatewayId][salesTokenAddress] += order.burnTokensClose;
                     order.burnTokensClose = 0;
@@ -355,7 +367,7 @@ contract DexApp  {
                 }
                 ds.sellOrders[gatewayId][salesTokenAddress].pop();
             } else {
-                if (remainingValueInAcceptedToken> 0) { //uint256 partialOrderAmount = (remainingValueInUSD / (order.price / 10**12)) * 10**18;
+                if (remainingValueInAcceptedToken> 0) { 
                     uint256 partialOrderAmount = (remainingValueInAcceptedToken / (order.price / 10**diffTokenDecimals)) * 10**ERC20(order.salesTokenAddress).decimals();
                     ds.totalCapAcceptedToken[gatewayId][salesTokenAddress] += remainingValueInAcceptedToken;
                     IERC20(order.salesTokenAddress).approve(toAddress, partialOrderAmount);
@@ -364,42 +376,49 @@ contract DexApp  {
                     ds.totalSoldTokens[gatewayId][salesTokenAddress] += partialOrderAmount;
                     ds.totalShellOfferTokens[gatewayId][salesTokenAddress] -= partialOrderAmount;
                     order.amount -= partialOrderAmount;
+                    if(order.preOrder){     
+                        if(ds.preOrder[gatewayId][salesTokenAddress] > 0){                       
+                            ERC20(gateway.onlyReceiveSwapTokenAddres).transfer(ds.destination[gatewayId][salesTokenAddress],  remainingValueInAcceptedToken);                         
+                        }
+                        else{  
+                            ERC20(gateway.onlyReceiveSwapTokenAddres).transfer(order.owner,  remainingValueInAcceptedToken);     
+                        }
+                    }                    
                 }
                 remainingValueInAcceptedToken= 0;
             }           
         }
 
-        if (remainingValueInAcceptedToken> 0) {
-            //emit Log(remainingValueInAcceptedToken);
-            ERC20(gateway.onlyReceiveSwapTokenAddres).approve(toAddress, remainingValueInAcceptedToken);
-            ERC20(gateway.onlyReceiveSwapTokenAddres).transferFrom(address(this), toAddress, remainingValueInAcceptedToken);            
+        if (remainingValueInAcceptedToken > 0) {
+            ERC20(gateway.onlyReceiveSwapTokenAddres).transfer(toAddress, remainingValueInAcceptedToken);            
         }
 
         if (ds.preOrder[gatewayId][salesTokenAddress] == 0) {
-            IAdminApp(address(this)).removeFunctionRole(bytes4(keccak256(bytes("transfer(address,uint256)"))));  
-            IAdminApp(address(this)).removeFunctionRole(bytes4(keccak256(bytes("transferFrom(address,address,uint256)")))); 
-            IAdminApp(address(this)).removeFunctionRole(bytes4(keccak256(bytes("approve(address,uint256)")))); 
-            IAdminApp(address(this)).removeFunctionRole(bytes4(keccak256(bytes("burn(uint256)")))); 
-            IAdminApp(address(this)).removeFunctionRole(bytes4(keccak256(bytes("burnFrom(address,uint256)"))));                         
-            IAdminApp(address(this)).removeFunctionRole(bytes4(keccak256(bytes("createPurchOrder(bytes32,address,bool,uint256,uint256,uint256)"))));                          
+            IAdminApp(address(this)).removeFunctionRole(bytes4(keccak256(bytes("transfer(address,uint256)"))), true);  
+            IAdminApp(address(this)).removeFunctionRole(bytes4(keccak256(bytes("transferFrom(address,address,uint256)"))), true); 
+            IAdminApp(address(this)).removeFunctionRole(bytes4(keccak256(bytes("approve(address,uint256)"))), true); 
+            IAdminApp(address(this)).removeFunctionRole(bytes4(keccak256(bytes("burn(uint256)"))), true); 
+            IAdminApp(address(this)).removeFunctionRole(bytes4(keccak256(bytes("burnFrom(address,uint256)"))), true);                         
+            IAdminApp(address(this)).removeFunctionRole(bytes4(keccak256(bytes("createPurchOrder(bytes32,address,bool,uint256,uint256,uint256)"))), true);                          
         }          
     }
 
+    function getAirdropBalance(bytes32 gatewayId, address salesTokenAddress) external view returns (uint256) {
+        LibDex.DexStorage storage ds = LibDex.domainStorage();
+        return ds.airdropAmount[gatewayId][salesTokenAddress]; 
+    }
 
     function getAirdropFactor(bytes32 gatewayId, address salesTokenAddress, uint256 balance) external view returns (uint256) {
-        if(balance == 0){
-            return 1;
-        }
-
         LibDex.DexStorage storage ds = LibDex.domainStorage();
         LibDex.AirdropRule[] memory rules = ds.airdropRules[gatewayId][salesTokenAddress];
 
+        uint256 currentfactor = 0;
         for (uint256 i = 0; i < rules.length; i++) {
-            if (balance <= rules[i].balanceToken) {
-                return rules[i].factor;
+            if (balance >= rules[i].balanceToken) {
+                currentfactor = rules[i].factor;
             }
         }
-        return 1; 
+        return currentfactor; 
     }
 
     function setAirdropFactor(bytes32 gatewayId, address salesTokenAddress, uint256 balanceToken, uint256 factor) external {
@@ -440,7 +459,12 @@ contract DexApp  {
         });
 
         LibDex.DexStorage storage ds = LibDex.domainStorage();  
-        require(ds.preOrder[gatewayId][salesTokenAddress] == 0|| ds.gateways[gatewayId].owner == msg.sender, "Cannot create orders until all cycles pre-seed are completed");
+        if(order.preOrder){
+            require(ds.gateways[gatewayId].owner == msg.sender, "Only gateway owner create pre orders");
+        }else{
+            require(ds.preOrder[gatewayId][salesTokenAddress] == 0, "Cannot create orders until all cycles pre-seed are completed");
+        }
+
         ERC20(salesTokenAddress).transferFrom(msg.sender, address(this), amount+tokenBurnedOnClose);
 
         if(preOrder){
@@ -481,17 +505,13 @@ contract DexApp  {
         LibDex.DexStorage storage ds = LibDex.domainStorage();  
         LibDex.Order storage order = isSellOrder ? ds.sellOrders[gatewayId][salesTokenAddress][orderIndex] : ds.buyOrders[gatewayId][salesTokenAddress][orderIndex];
         require(order.owner == msg.sender, "Only the owner can cancel the order");
-
-        // Refund tokens if it's a sell order
         if (order.isSellOrder) {
             ERC20(order.salesTokenAddress).transfer(msg.sender, order.amount+order.burnTokensClose);
         }
 
-
         if(order.preOrder){
             ds.preOrder[gatewayId][salesTokenAddress]--;
         }
-        // Remove the order from the list
         if (order.isSellOrder) {
             for (uint i = orderIndex; i < ds.sellOrders[gatewayId][salesTokenAddress].length - 1; i++) {
                 ds.sellOrders[gatewayId][salesTokenAddress][i] = ds.sellOrders[gatewayId][salesTokenAddress][i + 1];
@@ -503,7 +523,6 @@ contract DexApp  {
             }
             ds.buyOrders[gatewayId][salesTokenAddress].pop();
         }
-
 
         emit OrderCanceled(msg.sender, orderIndex);
     }
@@ -552,6 +571,4 @@ contract DexApp  {
         }
         return activeOrders;
     }
-
-
 }

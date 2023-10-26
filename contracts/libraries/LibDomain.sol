@@ -29,32 +29,26 @@ library LibDomain {
     bytes32 constant DOMAIN_STORAGE_POSITION = keccak256("domain.standard.storage");
     bytes32 constant DEFAULT_ADMIN_ROLE = keccak256("DEFAULT_ADMIN_ROLE");
     bytes32 constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
-    bytes32 constant DELEGATES_BEFORE_STORAGE_POSITION = keccak256(abi.encodePacked(LibDomain.DOMAIN_STORAGE_POSITION, "delegatesBeforeCount.standard.storage")); 
-    bytes32 constant DELEGATES_BEFORE_COUNT_STORAGE_POSITION = keccak256(abi.encodePacked(LibDomain.DOMAIN_STORAGE_POSITION, "delegatesBefore.standard.storage"));
-    bytes32 constant DELEGATES_AFTER_COUNT_STORAGE_POSITION = keccak256(abi.encodePacked(LibDomain.DOMAIN_STORAGE_POSITION, "delegatesAfterCount.standard.storage"));
-    bytes32 constant DELEGATES_AFTER_STORAGE_POSITION = keccak256(abi.encodePacked(LibDomain.DOMAIN_STORAGE_POSITION, "delegatesAfter.standard.storage"));
 
     event OwnershipTransferred(address previousOwner, address _newOwner);
     event AdminshipTransferred(address indexed previousAdmin, address indexed newAdmin);
     event FeatureManagerExecuted(IFeatureManager.Feature[] _features, address _initAddress, bytes4 _functionSelector, bytes _calldata, bool _force);
 
     struct FeatureAddressAndSelectorPosition {
-        address featureAddress;
-        uint16 selectorPosition;
+        address featureAddress; //0
+        uint16 selectorPosition; //1
     }
 
     struct DelegateSelector{
-        bytes4 selector;
-        address callToAddress;
-        bytes data;
-        bool disabled;
+        bytes4 selector; //2
+        address callToAddress; //3
+        bytes data; //4
+        bool disabled; //5
     }
 
     struct DomainStorage {
         address parentDomain;
-        string name;
-        address[] domains;
-        mapping(address => uint256) domainIdx;
+        string name;        
         mapping(bytes4 => FeatureAddressAndSelectorPosition) featureAddressAndSelectorPosition;
         bytes4[] selectors;
         mapping(address => bool) initializedFeatures;
@@ -65,13 +59,8 @@ library LibDomain {
         mapping(bytes32 => mapping(address => bool)) accessControl;
         mapping(bytes32 => bytes32) roleAdmins; 
         mapping(bytes4 => bytes32) functionRoles;
-        mapping(bytes32 => mapping(bytes32 => bytes32)) roles;
-        uint256 delegatesBeforeCount;
-        DelegateSelector[] delegatesBefore;        
-        uint256 delegatesAfterCount;        
-        DelegateSelector[] delegatesAfter;        
-        bool paused;
-        
+        mapping(bytes32 => mapping(bytes32 => bytes32)) roles;   
+        bool paused;  
     }
 
     function domainStorage() internal pure returns (DomainStorage storage ds) {
@@ -281,34 +270,34 @@ library LibDomain {
         }        
     }
 
-    function addOrUpdateDelegateBefore(bytes4 functionSelector, address delegateAddress, bytes memory data) internal {
-        enforceIsContractOwnerAdmin();
-        if(delegateAddress == address(this) || delegateAddress == address(0)){
-            delegateAddress = domainStorage().featureAddressAndSelectorPosition[functionSelector].featureAddress;
-        }
+    // function addOrUpdateDelegateBefore(bytes4 functionSelector, address delegateAddress, bytes memory data) internal {
+    //     enforceIsContractOwnerAdmin();
+    //     if(delegateAddress == address(this) || delegateAddress == address(0)){
+    //         delegateAddress = domainStorage().featureAddressAndSelectorPosition[functionSelector].featureAddress;
+    //     }
 
 
-        bool updated = false;
-        for (uint i = 0; i < domainStorage().delegatesBeforeCount; i++) {
-            if (domainStorage().delegatesBefore[i].selector == functionSelector) {
-                domainStorage().delegatesBefore[i].callToAddress = delegateAddress == address(0) ? address(this) : delegateAddress;
-                domainStorage().delegatesBefore[i].data = data;
-                domainStorage().delegatesBefore[i].disabled = false;
-                updated = true;
-                break;
-            }
-        }
+    //     bool updated = false;
+    //     for (uint i = 0; i < domainStorage().delegatesBeforeCount; i++) {
+    //         if (domainStorage().delegatesBefore[i].selector == functionSelector) {
+    //             domainStorage().delegatesBefore[i].callToAddress = delegateAddress == address(0) ? address(this) : delegateAddress;
+    //             domainStorage().delegatesBefore[i].data = data;
+    //             domainStorage().delegatesBefore[i].disabled = false;
+    //             updated = true;
+    //             break;
+    //         }
+    //     }
 
-        if (!updated) {
-            domainStorage().delegatesBefore.push(DelegateSelector({
-                selector: functionSelector,
-                callToAddress: delegateAddress,
-                data: data,
-                disabled: false
-            }));
-            domainStorage().delegatesBeforeCount++;
-        }
-    }
+    //     if (!updated) {
+    //         domainStorage().delegatesBefore.push(DelegateSelector({
+    //             selector: functionSelector,
+    //             callToAddress: delegateAddress,
+    //             data: data,
+    //             disabled: false
+    //         }));
+    //         domainStorage().delegatesBeforeCount++;
+    //     }
+    // }
 
     // function addOrUpdateDelegateAfter(bytes4 functionSelector, address delegateAddress, bytes memory data) internal {
     //     if(delegateAddress == address(this) || delegateAddress == address(0)){
@@ -337,16 +326,16 @@ library LibDomain {
     //     }
     // }
 
-    function removeDelegateBefore(bytes4 functionSelector) internal {
-        for (uint i = 0; i < domainStorage().delegatesBeforeCount; i++) {
-            if (domainStorage().delegatesBefore[i].selector == functionSelector) {
-                domainStorage().delegatesBefore[i] = domainStorage().delegatesBefore[domainStorage().delegatesBeforeCount - 1];
-                domainStorage().delegatesBefore.pop();
-                domainStorage().delegatesBeforeCount--;
-                break;
-            }
-        }
-    }
+    // function removeDelegateBefore(bytes4 functionSelector) internal {
+    //     for (uint i = 0; i < domainStorage().delegatesBeforeCount; i++) {
+    //         if (domainStorage().delegatesBefore[i].selector == functionSelector) {
+    //             domainStorage().delegatesBefore[i] = domainStorage().delegatesBefore[domainStorage().delegatesBeforeCount - 1];
+    //             domainStorage().delegatesBefore.pop();
+    //             domainStorage().delegatesBeforeCount--;
+    //             break;
+    //         }
+    //     }
+    // }
 
     // function removeDelegateAfter(bytes4 functionSelector) internal {
     //     for (uint i = 0; i < domainStorage().delegatesAfterCount; i++) {
@@ -359,14 +348,14 @@ library LibDomain {
     //     }
     // }
 
-    function disableDelegateBefore(bytes4 functionSelector) internal {
-        for (uint i = 0; i < domainStorage().delegatesBeforeCount; i++) {
-            if (domainStorage().delegatesBefore[i].selector == functionSelector) {
-                domainStorage().delegatesBefore[i].disabled = true;
-                break;
-            }
-        }
-    }
+    // function disableDelegateBefore(bytes4 functionSelector) internal {
+    //     for (uint i = 0; i < domainStorage().delegatesBeforeCount; i++) {
+    //         if (domainStorage().delegatesBefore[i].selector == functionSelector) {
+    //             domainStorage().delegatesBefore[i].disabled = true;
+    //             break;
+    //         }
+    //     }
+    // }
 
     // function disableDelegateAfter(bytes4 functionSelector) internal {
     //     for (uint i = 0; i < domainStorage().delegatesAfterCount; i++) {
@@ -377,14 +366,14 @@ library LibDomain {
     //     }
     // }
 
-    function positionDelegateBefore(uint oldIndex, uint newIndex) internal {
-        require(oldIndex < domainStorage().delegatesBeforeCount, "Invalid old index");
-        require(newIndex < domainStorage().delegatesBeforeCount, "Invalid new index");
+    // function positionDelegateBefore(uint oldIndex, uint newIndex) internal {
+    //     require(oldIndex < domainStorage().delegatesBeforeCount, "Invalid old index");
+    //     require(newIndex < domainStorage().delegatesBeforeCount, "Invalid new index");
 
-        DelegateSelector memory temp = domainStorage().delegatesBefore[oldIndex];
-        domainStorage().delegatesBefore[oldIndex] = domainStorage().delegatesBefore[newIndex];
-        domainStorage().delegatesBefore[newIndex] = temp;
-    }
+    //     DelegateSelector memory temp = domainStorage().delegatesBefore[oldIndex];
+    //     domainStorage().delegatesBefore[oldIndex] = domainStorage().delegatesBefore[newIndex];
+    //     domainStorage().delegatesBefore[newIndex] = temp;
+    // }
 
     // function positionDelegateAfter(uint oldIndex, uint newIndex) internal {
     //     require(oldIndex < domainStorage().delegatesAfterCount, "Invalid old index");

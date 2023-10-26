@@ -23,7 +23,7 @@ interface IAdminApp {
 
     function setFunctionRole(bytes4 functionSelector, bytes32 role) external;
 
-    function removeFunctionRole(bytes4 functionSelector) external;
+    function removeFunctionRole(bytes4 functionSelector, bool noError) external;
 
     function pauseDomain() external;
 

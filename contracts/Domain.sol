@@ -15,6 +15,7 @@ struct DomainArgs {
 contract Domain {
     error ReentrancyGuardLock(uint256 domainLocks, uint256 featureLocks, uint256 functinLocks, uint256 senderLocks);
     event DelegateBefore(bytes4 selector, address feature, bytes4 functionSelector, bytes data);
+  
 
     constructor(
         address _parentDomain,
