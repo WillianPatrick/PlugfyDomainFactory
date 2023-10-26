@@ -47,13 +47,13 @@ contract ReceiverApp {
         emit TokensReceived(tokenAddress, msg.sender, amount);
     } 
 
-    function getTokenBalance(address tokenAddress) returns (uint256){
+    function getTokenBalance(address tokenAddress) public returns (uint256){
         RceiverManager.DomainStorage storage ds = RceiverManager.domainStorage();
         return ds.tokenBalances[tokenAddress];
     }
 
-    function getSenderTokenBalance(address tokenAddress, address indexed from) returns (uint256){
+    function getSenderTokenBalance(address tokenAddress, address from) public returns (uint256){
         RceiverManager.DomainStorage storage ds = RceiverManager.domainStorage();
-        return ds.tokenBalances[tokenAddress][from];
+        return ds.tokenSenderBalances[tokenAddress][from];
     }    
 }
