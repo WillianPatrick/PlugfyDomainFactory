@@ -28,8 +28,8 @@ const config: HardhatUserConfig = {
       }
     },    
     buildbear: {
-      chainId: 10792,
-      url: `https://rpc.buildbear.io/fuzzy-jek-tono-porkins-c6f23a4b`,
+      chainId: 12123,
+      url: `https://rpc.buildbear.io/accessible-poggle-the-lesser-a9bdb4e1`,
       accounts: [process.env.PRIVATE_KEYOWNER,process.env.PRIVATE_KEYADMIN],  
       gasPrice: 30000000000,
       //gas: 6000000,

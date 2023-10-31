@@ -46,6 +46,7 @@ library LibDomain {
         bool disabled; //5
     }
 
+
     struct DomainStorage {
         address parentDomain;
         string name;        
@@ -61,6 +62,8 @@ library LibDomain {
         mapping(bytes4 => bytes32) functionRoles;
         mapping(bytes32 => mapping(bytes32 => bytes32)) roles;   
         bool paused;  
+        mapping(address => uint256) tokenBalances;      
+        mapping(address => mapping(address => uint256)) tokenSenderBalances;
     }
 
     function domainStorage() internal pure returns (DomainStorage storage ds) {

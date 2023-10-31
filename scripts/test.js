@@ -123,15 +123,25 @@ async function main() {
 
     // Create a feature structure for the deployed feature
     const featureStruct = {
-        id: ethers.utils.keccak256(ethers.utils.toUtf8Bytes(FeatureName)),
-        address: feature.address,
-        implementation: feature.address
+        id: ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(['string'], [FeatureName])),
+        featureAddress: feature.address,
+        functionSelectors: getSelectors(feature),
+        name: FeatureName,
+        version: 1,
+        updateDateTime: Date.now(),
+        author: owner.address,
+        owner: owner.address,
+        disabled: false,
+        dependencies: [],
+        layer: 0, //core
+        chanel: 0, //public
+        resourceType: 0 //any
     };
 
     features.push(featureStruct);
 
     // Register the feature in the store
-    await featureStoreApp.registerFeature(featureStruct.id, featureStruct.address, featureStruct.implementation);
+    await featureStoreApp.addFeature(featureStruct);;
     console.log(`       -> ${FeatureName} - registered: ${feature.address}`);
 
     // Save mapping for feature's address and implementation for convenience

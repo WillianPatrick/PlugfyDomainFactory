@@ -102,8 +102,7 @@ const FeatureNames = [
     'FeatureRoutesApp',
     'AdminApp',
     'DomainManagerApp',
-    'ReentrancyGuardApp',
-    'ReceiverApp'
+    'ReentrancyGuardApp'
 ];
 
 let coreBundleId = ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(['string'], ['Core']));
@@ -395,8 +394,12 @@ let featuresBundle;
     totalCost = totalCost.add(ethers.utils.parseEther(costFortxDexDestination));
     console.log(`                   -> Set destination swap sales amount to ${vickAiERC20TokenSeedFeature.address} at a cost of: ${costFortxDexDestination} ETH`);
 
-  async function _createPurchOrder(preOrder, amount, price, tokenBurnedOnClose) {
-    const tx = await dexAppFeature.createPurchOrder(
+  async function _createPurchOrder(preOrder, amount, price, tokenBurnedOnClose, account) {
+    if(account == undefined){
+      account = owner;
+    }
+
+    const tx = await dexAppFeature.connect(account).createPurchOrder(
         gatewayId,
         vickAiERC20TokenSeedFeature.address,
         preOrder,
@@ -408,7 +411,7 @@ let featuresBundle;
     const costForOrderCreation = await getTransactionCost(tx);
     totalCost = totalCost.add(ethers.utils.parseEther(costForOrderCreation));
     
-    console.log(`                     -> Order created: Amount: ${amount}, Price: ${price}, Burned on close: ${tokenBurnedOnClose}, Cost: ${costForOrderCreation} ETH`);
+    console.log(`                     -> Account: ${account.address} Order created: Amount: ${amount}, Price: ${price}, Burned on close: ${tokenBurnedOnClose}, Cost: ${costForOrderCreation} ETH`);
   }
 
   // Create purchase orders based on provided information
@@ -418,6 +421,18 @@ let featuresBundle;
   await _createPurchOrder(true, ethers.utils.parseUnits("358291.38", 18), ethers.utils.parseUnits("0.300590", 18), ethers.utils.parseUnits("71658.28", 18));
   await _createPurchOrder(true, ethers.utils.parseUnits("228874.07", 18), ethers.utils.parseUnits("0.392710", 18), ethers.utils.parseUnits("68662.22", 18));
   await _createPurchOrder(true, ethers.utils.parseUnits("266026.95", 18), ethers.utils.parseUnits("0.495810", 18), ethers.utils.parseUnits("106410.78", 18));
+
+  const txMinPrice = await dexAppFeature.setMinSalesPriceTokenUnit(gatewayId, addressVickAiTokenSeedDomain, 495810000000000000n);
+  await txMinPrice.wait();
+  const costFortxMinPrice = await getTransactionCost(txMinPrice);
+  totalCost = totalCost.add(ethers.utils.parseEther(costFortxMinPrice));
+  console.log(`                   -> Set min price unit Vick Seed Token on create sales order 0.49581 at a cost of: ${costFortxMinPrice} ETH`);
+
+  const txEnabledMinPrice = await dexAppFeature.setEnabledMinSalesPriceTokenUnit(gatewayId, addressVickAiTokenSeedDomain, true);
+  await txEnabledMinPrice.wait();
+  const costFortxEnabledMinPrice = await getTransactionCost(txEnabledMinPrice);
+  totalCost = totalCost.add(ethers.utils.parseEther(costFortxEnabledMinPrice));
+  console.log(`                   -> Set enabled min price rule at a cost of: ${costFortxEnabledMinPrice} ETH`);
 
   let currentVickSOwnerBalance = await vickAiERC20TokenSeedFeature.balanceOf(owner.address);
   const addAirDropAmount = await dexAppFeature.addAirDropAmount(gatewayId, dexAppFeature.address, currentVickSOwnerBalance);
@@ -450,35 +465,47 @@ let featuresBundle;
   totalCost = totalCost.add(ethers.utils.parseEther(costaddAirDropFactor4));
   console.log(`                   -> Added base 1000 VICK-S for factor 4 on Airdrop at a cost of: ${costaddAirDropFactor4} ETH`);  
 
-const USDCContract = await ethers.getContractAt('ERC20', '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'); // The address of USDC
- // Calculate the required amount of USDC for purchasing 1000 Vick-S tokens
- const purchaseAmount = ethers.utils.parseUnits('300000', 18); 
- const requiredUSDC = purchaseAmount.mul(ethers.utils.parseUnits('0.200000', 6)).div(ethers.utils.parseUnits('1', 18)); // Assuming 0.495810 USDC per Vick-S token from the last purchase order
- console.log(`                     -> Admin USDC balance of: ${await USDCContract.balanceOf(admin.address)}`);
- //Approve the DEX contract to spend the required amount of USDC on behalf of the Admin
+// const USDCContract = await ethers.getContractAt('ERC20', '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'); // The address of USDC
+//  // Calculate the required amount of USDC for purchasing 1000 Vick-S tokens
+//  const purchaseAmount = ethers.utils.parseUnits('167237297', 18); 
+//  const requiredUSDC = ethers.utils.parseUnits('515500', 6);//purchaseAmount.mul(ethers.utils.parseUnits('0.200000', 6)).div(ethers.utils.parseUnits('1', 18)); // Assuming 0.495810 USDC per Vick-S token from the last purchase order
+//  console.log(`                     -> Admin USDC balance of: ${await USDCContract.balanceOf(admin.address)}`);
+//  //Approve the DEX contract to spend the required amount of USDC on behalf of the Admin
  
- const approveTx2 = await USDCContract.connect(admin).approve(vickAiERC20TokenSeedFeature.address, requiredUSDC);
- await approveTx2.wait();
- const costForApproval2 = await getTransactionCost(approveTx2);
- totalCost = totalCost.add(ethers.utils.parseEther(costForApproval));
- console.log(`                     -> Approved DexApp to spend ${requiredUSDC} USDC at a cost of: ${costForApproval2} ETH`);
+//  const approveTx2 = await USDCContract.connect(admin).approve(vickAiERC20TokenSeedFeature.address, requiredUSDC);
+//  await approveTx2.wait();
+//  const costForApproval2 = await getTransactionCost(approveTx2);
+//  totalCost = totalCost.add(ethers.utils.parseEther(costForApproval));
+//  console.log(`                     -> Approved DexApp to spend ${requiredUSDC} USDC at a cost of: ${costForApproval2} ETH`);
 
 
- //Purchase 1000 Vick-S tokens using USDC from the Admin account
- const purchaseTx = await dexAppFeature.connect(admin).swapToken(
-     gatewayId,
-     vickAiERC20TokenSeedFeature.address,
-     "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174", // USDC as the input token
-     requiredUSDC,
-     admin.address, // tokens will be sent to the admin address
-     ethers.constants.AddressZero // No airdrop
- );
- await purchaseTx.wait();
- const costForPurchase = await getTransactionCost(purchaseTx);
- totalCost = totalCost.add(ethers.utils.parseEther(costForPurchase));
- let balanceAdmin0 = await vickAiERC20TokenSeedFeature.balanceOf(admin.address);
- console.log(`                     -> Admin purchased ${balanceAdmin0} Vick-S tokens at a cost of: ${costForPurchase} ETH`);
+//  //Purchase 1000 Vick-S tokens using USDC from the Admin account
+//  const purchaseTx = await dexAppFeature.connect(admin).swapToken(
+//      gatewayId,
+//      vickAiERC20TokenSeedFeature.address,
+//      "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174", // USDC as the input token
+//      requiredUSDC,
+//      admin.address, // tokens will be sent to the admin address
+//      ethers.constants.AddressZero // No airdrop
+//  );
+//  await purchaseTx.wait();
+//  const costForPurchase = await getTransactionCost(purchaseTx);
+//  totalCost = totalCost.add(ethers.utils.parseEther(costForPurchase));
+//  let balanceAdmin0 = await vickAiERC20TokenSeedFeature.balanceOf(admin.address);
+//  console.log(`                     -> Admin purchased ${balanceAdmin0} Vick-S tokens at a cost of: ${costForPurchase} ETH`);
     
+//  const totalTokenSupply2 = await vickAiERC20TokenSeedFeature.balanceOf(admin.address) 
+//  const approveTx4 = await vickAiERC20TokenSeedFeature.connect(admin).approve(dexAppFeature.address, totalTokenSupply2);
+//  await approveTx4.wait();
+//  const costForApproval4 = await getTransactionCost(approveTx4);
+//  totalCost = totalCost.add(ethers.utils.parseEther(costForApproval4));
+//  console.log(`                   -> Approved ${totalTokenSupply2} VICK-S for DexApp at a cost of: ${costForApproval4} ETH`);
+
+//  await _createPurchOrder(false, ethers.utils.parseUnits("836186.485", 18), ethers.utils.parseUnits("0.500000", 18), 0, admin); 
+//  await _createPurchOrder(false, ethers.utils.parseUnits("736186.485", 18), ethers.utils.parseUnits("0.790000", 18), 0, admin); 
+//  await _createPurchOrder(false, ethers.utils.parseUnits("100000.00", 18), ethers.utils.parseUnits("0.20000", 18), 0, admin).catch(error => {
+//   console.log(`\n\n***** All tests OK ****`);
+// });;
 
     // const WMaticContract = await ethers.getContractAt('IERC20', '0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270'); // The address of Wmatic
     // const approveWMATICTx2 = await WMaticContract.connect(admin).approve(vickAiERC20TokenSeedFeature.address, ethers.utils.parseEther('1000'));
@@ -502,61 +529,61 @@ const USDCContract = await ethers.getContractAt('ERC20', '0x2791Bca1f2de4661ED88
 //  console.log(`                     -> Admin purchased 1000 Vick-S tokens at a cost of: ${costForPurchase} ETH`);
 
 
-  const swapTx = await dexAppFeature.connect(admin).swapNativeToken(gatewayId, vickAiERC20TokenSeedFeature.address, owner.address, {
-      value: ethers.utils.parseEther('4450')
-  });
-  await swapTx.wait();
+//   const swapTx = await dexAppFeature.connect(admin).swapNativeToken(gatewayId, vickAiERC20TokenSeedFeature.address, owner.address, {
+//       value: ethers.utils.parseEther('4450')
+//   });
+//   await swapTx.wait();
   
-   const costForSwap = await getTransactionCost(swapTx);
-   totalCost = totalCost.add(ethers.utils.parseEther(costForSwap));
-   let balanceAdmin = await vickAiERC20TokenSeedFeature.balanceOf(admin.address);
-   console.log(`                   -> Swap ${ethers.utils.parseEther('4450')} Native to ${balanceAdmin - balanceAdmin0} VICK-S at a cost of: ${costForSwap} ETH`);
+//    const costForSwap = await getTransactionCost(swapTx);
+//    totalCost = totalCost.add(ethers.utils.parseEther(costForSwap));
+//    let balanceAdmin = await vickAiERC20TokenSeedFeature.balanceOf(admin.address);
+//    console.log(`                   -> Swap ${ethers.utils.parseEther('4450')} Native to ${balanceAdmin - balanceAdmin0} VICK-S at a cost of: ${costForSwap} ETH`);
 
-   const swapTx2 = await dexAppFeature.connect(admin).swapNativeToken(gatewayId, vickAiERC20TokenSeedFeature.address, owner.address, {
-    value: ethers.utils.parseEther('4450')
-});
-await swapTx2.wait();
+//    const swapTx2 = await dexAppFeature.connect(admin).swapNativeToken(gatewayId, vickAiERC20TokenSeedFeature.address, owner.address, {
+//     value: ethers.utils.parseEther('4450')
+// });
+// await swapTx2.wait();
 
- const costForSwap2 = await getTransactionCost(swapTx2);
- totalCost = totalCost.add(ethers.utils.parseEther(costForSwap2));
- let balanceAdmin2 = await vickAiERC20TokenSeedFeature.balanceOf(admin.address);
- console.log(`                   -> Swap ${ethers.utils.parseEther('4450')} Native to ${balanceAdmin2 - balanceAdmin - balanceAdmin0} VICK-S and indicate Owner to airdrop at a cost of: ${costForSwap2} ETH`);
+//  const costForSwap2 = await getTransactionCost(swapTx2);
+//  totalCost = totalCost.add(ethers.utils.parseEther(costForSwap2));
+//  let balanceAdmin2 = await vickAiERC20TokenSeedFeature.balanceOf(admin.address);
+//  console.log(`                   -> Swap ${ethers.utils.parseEther('4450')} Native to ${balanceAdmin2 - balanceAdmin - balanceAdmin0} VICK-S and indicate Owner to airdrop at a cost of: ${costForSwap2} ETH`);
 
-  console.log(`                     -> Vick seed USDC balance of: ${await USDCContract.balanceOf(addressVickAiSubdomain)}`);
-  balanceOwner = await vickAiERC20TokenSeedFeature.balanceOf(owner.address);
-  let diffBalanceOwner = balanceOwner - currentVickSOwnerBalance;
-  console.log(`                   -> Earned ${diffBalanceOwner} VICK-S at airdrop indication`);
+//   console.log(`                     -> Vick seed USDC balance of: ${await USDCContract.balanceOf(addressVickAiSubdomain)}`);
+//   balanceOwner = await vickAiERC20TokenSeedFeature.balanceOf(owner.address);
+//   let diffBalanceOwner = balanceOwner - currentVickSOwnerBalance;
+//   console.log(`                   -> Earned ${diffBalanceOwner} VICK-S at airdrop indication`);
 
-  const quotes = await dexAppFeature.connect(owner).getSwapQuote(gatewayId, "0xd6df932a45c0f255f85145f286ea0b292b21c90b", ethers.utils.parseEther('1000'));
-  if (!quotes || quotes.length === 0) {
-      throw new Error('No quotes returned');
-  }
-  const firstQuote = quotes[0];
-  console.log(`                     -> Quote: ${firstQuote.tokenInAmount} AAVE to ${firstQuote.tokenInAmount} Vick-S tokens at a cost of: ${costForPurchase} ETH`);
+//   const quotes = await dexAppFeature.connect(owner).getSwapQuote(gatewayId, "0xd6df932a45c0f255f85145f286ea0b292b21c90b", ethers.utils.parseEther('1000'));
+//   if (!quotes || quotes.length === 0) {
+//       throw new Error('No quotes returned');
+//   }
+//   const firstQuote = quotes[0];
+//   console.log(`                     -> Quote: ${firstQuote.tokenInAmount} AAVE to ${firstQuote.tokenInAmount} Vick-S tokens at a cost of: ${costForPurchase} ETH`);
 
- const AAVEContract = await ethers.getContractAt('ERC20', '0xd6df932a45c0f255f85145f286ea0b292b21c90b'); // AAVE
- const approveTx3 = await AAVEContract.connect(owner).approve(vickAiERC20TokenSeedFeature.address, firstQuote.tokenInAmount);
- await approveTx3.wait();
- const costForApproval3 = await getTransactionCost(approveTx3);
- totalCost = totalCost.add(ethers.utils.parseEther(costForApproval3));
- console.log(`                     -> Approved DexApp to spend ${firstQuote.tokenInAmount} AAVE at a cost of: ${costForApproval3} ETH`);
-
-
-  const purchaseTx2 = await dexAppFeature.connect(owner).swapToken(
-    gatewayId,
-    vickAiERC20TokenSeedFeature.address,
-    "0xd6df932a45c0f255f85145f286ea0b292b21c90b", // AAVE as the input token
-    firstQuote.tokenInAmount,
-    owner.address, 
-    admin.address
-);
+//  const AAVEContract = await ethers.getContractAt('ERC20', '0xd6df932a45c0f255f85145f286ea0b292b21c90b'); // AAVE
+//  const approveTx3 = await AAVEContract.connect(owner).approve(vickAiERC20TokenSeedFeature.address, firstQuote.tokenInAmount);
+//  await approveTx3.wait();
+//  const costForApproval3 = await getTransactionCost(approveTx3);
+//  totalCost = totalCost.add(ethers.utils.parseEther(costForApproval3));
+//  console.log(`                     -> Approved DexApp to spend ${firstQuote.tokenInAmount} AAVE at a cost of: ${costForApproval3} ETH`);
 
 
-await purchaseTx2.wait();
-const costForPurchase2 = await getTransactionCost(purchaseTx2);
-totalCost = totalCost.add(ethers.utils.parseEther(costForPurchase2));
-let balanceOwner0 = await vickAiERC20TokenSeedFeature.balanceOf(owner.address);
-console.log(`                     -> Owner purchased ${balanceOwner0 - balanceOwner} Vick-S tokens at a cost of: ${costForPurchase2} ETH`);
+//   const purchaseTx2 = await dexAppFeature.connect(owner).swapToken(
+//     gatewayId,
+//     vickAiERC20TokenSeedFeature.address,
+//     "0xd6df932a45c0f255f85145f286ea0b292b21c90b", // AAVE as the input token
+//     firstQuote.tokenInAmount,
+//     owner.address, 
+//     admin.address
+// );
+
+
+// await purchaseTx2.wait();
+// const costForPurchase2 = await getTransactionCost(purchaseTx2);
+// totalCost = totalCost.add(ethers.utils.parseEther(costForPurchase2));
+// let balanceOwner0 = await vickAiERC20TokenSeedFeature.balanceOf(owner.address);
+// console.log(`                     -> Owner purchased ${balanceOwner0 - balanceOwner} Vick-S tokens at a cost of: ${costForPurchase2} ETH`);
 
   
 

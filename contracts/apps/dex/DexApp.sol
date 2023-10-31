@@ -67,6 +67,10 @@ library LibDex {
         mapping(bytes32 => mapping(address => Order[])) sellOrders;
         mapping(bytes32 => mapping(address => uint256)) totalCapAcceptedToken;
         mapping(bytes32 => mapping(address => uint256)) totalShellOfferTokens;
+        mapping(bytes32 => mapping(address => bool)) enabledMinSalesPriceTokenUnit;
+        mapping(bytes32 => mapping(address => bool)) enabledMaxSalesPriceTokenUnit;        
+        mapping(bytes32 => mapping(address => uint256)) minSalesPriceTokenUnit;
+        mapping(bytes32 => mapping(address => uint256)) maxSalesPriceTokenUnit;
         mapping(bytes32 => mapping(address => uint256)) totalSoldTokens;
         mapping(bytes32 => mapping(address => uint256)) airdropAmount;
         mapping(bytes32 => mapping(address => mapping(address => uint256))) earnedTokens;
@@ -91,6 +95,19 @@ library LibDex {
 }
 
 contract DexApp  {
+
+    modifier onlyOwnerGateway(bytes32 gatewayId) {
+        LibDex.DexStorage storage ds = LibDex.domainStorage();
+        require(ds.gateways[gatewayId].owner == msg.sender, "Gateway owner access required");
+        _;
+    }
+
+    modifier onlyOwnerOrder(bytes32 gatewayId, address salesTokenAddress, uint256 orderIndex ) {
+        LibDex.DexStorage storage ds = LibDex.domainStorage();
+        require(ds.sellOrders[gatewayId][salesTokenAddress][orderIndex].owner == msg.sender, "Order owner access required");
+        _;
+    }    
+    
   
     event GatewayCreated(bytes32 gatewayId, string gatewayName);
     event OrderCreated(address indexed owner, address salesTokenAddress, uint256 amount, uint256 price, bool isSellOrder);
@@ -110,6 +127,16 @@ contract DexApp  {
 
         ds.initialized = true;
         IReentrancyGuardApp(address(this)).enableDisabledDomainReentrancyGuard(true);
+    }
+
+    function getCurrentOrder(bytes32 gatewayId, address salesTokenAddress) public view returns (uint256){
+        LibDex.DexStorage storage ds = LibDex.domainStorage();
+        return ds.currentOrder[gatewayId][salesTokenAddress];
+    }
+
+    function totalShellOfferTokens(bytes32 gatewayId, address salesTokenAddress) public view returns (uint256){
+        LibDex.DexStorage storage ds = LibDex.domainStorage();
+        return ds.totalShellOfferTokens[gatewayId][salesTokenAddress];
     }
 
     function createGateway(string memory _gatewayName, address _onlyReceiveSwapTokenAddres, LibDex.Router[] memory _routers) public returns (bytes32) {
@@ -154,17 +181,15 @@ contract DexApp  {
         require(token0 != address(0), 'UniswapV2Library: ZERO_ADDRESS');
     }
 
-    function addAirDropAmount(bytes32 gatewayId, address salesTokenAddress, uint256 amount) external returns (uint256) {
+    function addAirDropAmount(bytes32 gatewayId, address salesTokenAddress, uint256 amount) onlyOwnerGateway(gatewayId) external returns (uint256) {
         LibDex.DexStorage storage ds = LibDex.domainStorage();
-        require(ds.gateways[gatewayId].owner == msg.sender, "Only the gateway owner can add the airdrop amount to the balance");
         ERC20(salesTokenAddress).transferFrom(msg.sender, address(this), amount);
         ds.airdropAmount[gatewayId][salesTokenAddress] += amount;
         return ds.airdropAmount[gatewayId][salesTokenAddress];
     }
 
-    function removeAirDropAmount(bytes32 gatewayId, address salesTokenAddress, uint256 amount) external returns (uint256) {
+    function removeAirDropAmount(bytes32 gatewayId, address salesTokenAddress, uint256 amount) onlyOwnerGateway(gatewayId) external returns (uint256) {
         LibDex.DexStorage storage ds = LibDex.domainStorage();
-        require(ds.gateways[gatewayId].owner == msg.sender, "Only the gateway owner can remove the airdrop amount to the balance");
         ERC20(salesTokenAddress).transferFrom(address(this), msg.sender, amount);
         ds.airdropAmount[gatewayId][salesTokenAddress] -= amount;
         return ds.airdropAmount[gatewayId][salesTokenAddress];
@@ -178,6 +203,36 @@ contract DexApp  {
         (uint112 reserve0, uint112 reserve1,) = pair.getReserves();
         return (reserve0, reserve1);
     }
+
+    function setEnabledMinSalesPriceTokenUnit(bytes32 gatewayId, address salesTokenAddress, bool enabled) onlyOwnerGateway(gatewayId) external {
+        LibDex.DexStorage storage ds = LibDex.domainStorage();
+        ds.enabledMinSalesPriceTokenUnit[gatewayId][salesTokenAddress] = enabled;
+    }
+    function setEnabledMaxSalesPriceTokenUnit(bytes32 gatewayId, address salesTokenAddress, bool enabled) onlyOwnerGateway(gatewayId) external {
+        LibDex.DexStorage storage ds = LibDex.domainStorage();
+        ds.enabledMaxSalesPriceTokenUnit[gatewayId][salesTokenAddress] = enabled;
+    }    
+
+    function setMinSalesPriceTokenUnit(bytes32 gatewayId, address salesTokenAddress, uint256 price) onlyOwnerGateway(gatewayId) external  {
+        LibDex.DexStorage storage ds = LibDex.domainStorage();
+        ds.minSalesPriceTokenUnit[gatewayId][salesTokenAddress] = price;
+    }
+
+    function setMaxSalesPriceTokenUnit(bytes32 gatewayId, address salesTokenAddress, uint256 price) onlyOwnerGateway(gatewayId) external {
+        LibDex.DexStorage storage ds = LibDex.domainStorage();
+        ds.maxSalesPriceTokenUnit[gatewayId][salesTokenAddress] = price;
+    }    
+
+    function getMinSalesPriceTokenUnit(bytes32 gatewayId, address salesTokenAddress) external view returns (uint256) {
+        LibDex.DexStorage storage ds = LibDex.domainStorage();
+        return ds.minSalesPriceTokenUnit[gatewayId][salesTokenAddress];
+    }
+
+    function getMaxSalesPriceTokenUnit(bytes32 gatewayId, address salesTokenAddress) external view returns (uint256) {
+        LibDex.DexStorage storage ds = LibDex.domainStorage();
+        return ds.maxSalesPriceTokenUnit[gatewayId][salesTokenAddress];
+    }    
+        
 
     function getSwapQuote(bytes32 gatewayId, address tokenIn, uint256 tokenInAmount) external view returns (LibDex.Quote[] memory) {
         LibDex.DexStorage storage ds = LibDex.domainStorage();
@@ -421,7 +476,7 @@ contract DexApp  {
         return currentfactor; 
     }
 
-    function setAirdropFactor(bytes32 gatewayId, address salesTokenAddress, uint256 balanceToken, uint256 factor) external {
+    function setAirdropFactor(bytes32 gatewayId, address salesTokenAddress, uint256 balanceToken, uint256 factor) onlyOwnerGateway(gatewayId) external {
         LibDex.DexStorage storage ds = LibDex.domainStorage();
         LibDex.AirdropRule[] storage rules = ds.airdropRules[gatewayId][salesTokenAddress];
 
@@ -441,7 +496,7 @@ contract DexApp  {
         }
     }
 
-    function setTokenDestination(bytes32 gatewayId, address salesTokenAddress, address payable _destination) public {
+    function setTokenDestination(bytes32 gatewayId, address salesTokenAddress, address payable _destination) onlyOwnerGateway(gatewayId) public {
         LibDex.DexStorage storage ds = LibDex.domainStorage();
         ds.destination[gatewayId][salesTokenAddress] = _destination;
     }
@@ -459,6 +514,14 @@ contract DexApp  {
         });
 
         LibDex.DexStorage storage ds = LibDex.domainStorage();  
+        if(!order.preOrder && ds.preOrder[gatewayId][salesTokenAddress] == 0 && ds.enabledMinSalesPriceTokenUnit[gatewayId][salesTokenAddress]){
+            require(price >= ds.minSalesPriceTokenUnit[gatewayId][salesTokenAddress], "The unit selling price must be greater than or equal to the minimum selling price");
+        }
+
+        if(!order.preOrder && ds.preOrder[gatewayId][salesTokenAddress] == 0 && ds.enabledMaxSalesPriceTokenUnit[gatewayId][salesTokenAddress]){
+            require(price >= ds.maxSalesPriceTokenUnit[gatewayId][salesTokenAddress], "The unit selling price must be less than or equal to the maximum selling price");
+        }        
+
         if(order.preOrder){
             require(ds.gateways[gatewayId].owner == msg.sender, "Only gateway owner create pre orders");
         }else{

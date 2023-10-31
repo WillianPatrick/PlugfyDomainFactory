@@ -15,7 +15,7 @@ struct DomainArgs {
 contract Domain {
     error ReentrancyGuardLock(uint256 domainLocks, uint256 featureLocks, uint256 functinLocks, uint256 senderLocks);
     event DelegateBefore(bytes4 selector, address feature, bytes4 functionSelector, bytes data);
-  
+    event TokensReceived(address indexed from, uint256 amount);
 
     constructor(
         address _parentDomain,
@@ -47,16 +47,16 @@ contract Domain {
     }
 
 
-    fallback() external payable {
+    fallback() external virtual payable {
         delegateToFeature(msg.sig);
     }
 
-    receive() external payable {
+    receive() external virtual payable {
         bytes4 receiveSelector = bytes4(keccak256(bytes("receive()")));
-        delegateToFeature(receiveSelector);
+        delegateToFeature(receiveSelector);    
     }
-
-    function delegateToFeature(bytes4 functionSelector) internal {
+    
+    function delegateToFeature(bytes4 functionSelector) internal virtual {
         LibDomain.DomainStorage storage ds = LibDomain.domainStorage();
 
         address feature = ds.featureAddressAndSelectorPosition[functionSelector].featureAddress;
