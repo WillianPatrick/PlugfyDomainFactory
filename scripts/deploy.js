@@ -1,3 +1,4 @@
+const { latest } = require("@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time");
 const { BigNumber } = require("ethers");
 const { ethers, upgrades } = require("hardhat");
 
@@ -6,6 +7,17 @@ const green = '\x1b[32m';
 const yellow = '\x1b[33m';
 const blue = '\x1b[34m';
 const reset = '\x1b[0m';
+let totalCost = ethers.BigNumber.from("0");
+
+
+async function main() {
+
+  const [owner, admin] = await ethers.getSigners();
+  let nonce = await ethers.provider.getTransactionCount(owner.address, "latest");
+  let gasPrice = await ethers.provider.getGasPrice();
+
+console.log("Deploying contracts with the account:", owner.address);
+
 
 function getSelectors(contract) {
   const signatures = Object.keys(contract.interface.functions);
@@ -27,8 +39,24 @@ function getSelector(contract, functionName) {
 
 
 async function getTransactionCost(tx) {
-  const receipt = await ethers.provider.getTransactionReceipt(tx.hash);
-  const cost = receipt.gasUsed.mul(tx.gasPrice);
+    let receipt = null;
+    while (receipt === null) {
+        receipt = await ethers.provider.getTransactionReceipt(tx.hash);
+        if (receipt === null) {
+            await new Promise(resolve => setTimeout(resolve, 5000)); // espera 5 segundos antes de tentar novamente
+        }
+    }
+
+    const cost = receipt.gasUsed.mul(tx.gasPrice);
+
+  let latestNonce = await ethers.provider.getTransactionCount(owner.address, "latest");
+  if(latestNonce > nonce)
+    nonce = latestNonce;
+  else
+    nonce++;
+  
+  gasPrice = await ethers.provider.getGasPrice();
+
   return ethers.utils.formatEther(cost);
 }
 
@@ -63,8 +91,8 @@ async function initializeFeature(contractName, functionName, contractAddress, ar
       throw new Error(`               -> ${contractName} - ${functionName} does not exist on the contract.`);
   }
 
-  const tx = await contract[functionName](...args);
-  await tx.wait();
+  const tx = await contract[functionName](...args,{nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});
+  await tx.wait(1);
 
   const cost = await getTransactionCost(tx);
   console.log(`               -> ${contractName} - ${functionName} executed at a cost of ${cost} ETH`);
@@ -92,8 +120,8 @@ async function monitorDomainEvents(domainAddress) {
 
   //console.log(`             -> Monitoring events for Domain contract at address ${domainAddress}...`);
 }
-let totalCost = ethers.BigNumber.from("0");
-async function main() {
+
+
 
 let featureToAddressImplementation = {};
 const FeatureNames = [
@@ -102,22 +130,17 @@ const FeatureNames = [
     'FeatureRoutesApp',
     'AdminApp',
     'DomainManagerApp',
-    'ReentrancyGuardApp'
+    'ReentrancyGuardApp',
+    'TokenVaultApp',
+    'ProposalApp'
 ];
 
 let coreBundleId = ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(['string'], ['Core']));
 let featuresBundle;
 
-  const [owner, admin] = await ethers.getSigners();
-  const Faucet = await ethers.getContractFactory('Faucet');
-  const faucet = await Faucet.deploy();
-  await faucet.withdrawAll();
-  
-  
-  console.log("Deploying contracts with the account:", owner.address);
-  
+
   const FeatureStoreApp = await ethers.getContractFactory("FeatureStoreApp");
-  const featureStoreApp = await FeatureStoreApp.deploy();
+  const featureStoreApp = await FeatureStoreApp.deploy({nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});
   await featureStoreApp.deployed();
   const costForFeatureStoreApp = await getTransactionCost(featureStoreApp.deployTransaction);
   totalCost = totalCost.add(ethers.utils.parseEther(costForFeatureStoreApp));
@@ -130,7 +153,7 @@ let featuresBundle;
         // Deploying and registering each core feature
         for (const FeatureName of FeatureNames) {
           const Feature = await ethers.getContractFactory(FeatureName);
-          const feature = (FeatureName == 'FeatureStoreApp') ? featureStoreApp : await Feature.deploy();
+          const feature = (FeatureName == 'FeatureStoreApp') ? featureStoreApp : await Feature.deploy({nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});
           if (FeatureName != 'FeatureStoreApp') {
               await feature.deployed();
               const costForFeature = await getTransactionCost(feature.deployTransaction);
@@ -157,7 +180,7 @@ let featuresBundle;
             };
 
             // Register the deployed feature in the FeatureStore
-            const tx = await featureStoreApp.addFeature(featureStruct);
+            const tx = await featureStoreApp.addFeature(featureStruct,{nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});
             const costForAddFeature = await getTransactionCost(tx);
             totalCost = totalCost.add(ethers.utils.parseEther(costForAddFeature));
             
@@ -184,7 +207,7 @@ let featuresBundle;
             resourceType: 0 //domain
         };
 
-        const bundleTx = await featureStoreApp.addBundle(coreBundle);
+        const bundleTx = await featureStoreApp.addBundle(coreBundle, {nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});
         const costForAddBundle = await getTransactionCost(bundleTx);
         totalCost = totalCost.add(ethers.utils.parseEther(costForAddBundle));
         
@@ -202,13 +225,15 @@ let featuresBundle;
 
 
       const Domain = await ethers.getContractFactory('Domain');
-      const domain = await Domain.deploy(ethers.constants.AddressZero, "Genesis", features, _args);
+      const domain = await Domain.deploy(ethers.constants.AddressZero, "Genesis", features, _args,{nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});
       await domain.deployed();
       let addressGenesisDomain = domain.address;
       const costForDomain = await getTransactionCost(domain.deployTransaction);
       totalCost = totalCost.add(ethers.utils.parseEther(costForDomain));
       console.log(`Genesis domain created: ${addressGenesisDomain} at a cost of: ${costForDomain} ETH`);
 
+
+ 
     //   const ReentranceGuardAppFeature2 = await ethers.getContractAt('ReentrancyGuardApp', addressGenesisDomain);
 
     // const initSecTx2 = await ReentranceGuardAppFeature2._initReentrancyGuard();
@@ -231,7 +256,7 @@ let featuresBundle;
             initCalldata: '0x00'
     };
 
-    const createDomainTx = await domainManagerFeature.createDomain(addressGenesisDomain, "Plugfy", features, plugfyArgs);
+    const createDomainTx = await domainManagerFeature.createDomain(addressGenesisDomain, "Plugfy", features, plugfyArgs,{nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});
     const costForCreateDomain = await getTransactionCost(createDomainTx);
     totalCost = totalCost.add(ethers.utils.parseEther(costForCreateDomain));
 
@@ -252,7 +277,7 @@ let featuresBundle;
             initCalldata: '0x00'
     };
 
-    const createVickAiTx = await plugfyDomainManagerFeature.createDomain(addressGenesisDomain, "VickAi", features, vickAiArgs);
+    const createVickAiTx = await plugfyDomainManagerFeature.createDomain(addressGenesisDomain, "VickAi", features, vickAiArgs,{nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});
     const costForCreateVickAi = await getTransactionCost(createVickAiTx);
     totalCost = totalCost.add(ethers.utils.parseEther(costForCreateVickAi));
     
@@ -262,6 +287,8 @@ let featuresBundle;
     
     totalCost = totalCost.add(ethers.utils.parseEther(await initializeFeature('AdminApp','_initAdminApp', addressVickAiSubdomain, [])));
     totalCost = totalCost.add(ethers.utils.parseEther(await initializeFeature('ReentrancyGuardApp','_initReentrancyGuard', addressVickAiSubdomain, [])));
+    totalCost = totalCost.add(ethers.utils.parseEther(await initializeFeature('TokenVaultApp','_initTokenVaultApp', addressVickAiSubdomain, [])));
+    totalCost = totalCost.add(ethers.utils.parseEther(await initializeFeature('ProposalApp','_initProposalApp', addressVickAiSubdomain, [])));
 
 
     const vickAiDomainManagerFeature = await ethers.getContractAt('DomainManagerApp', addressVickAiSubdomain);
@@ -277,7 +304,7 @@ let featuresBundle;
     let extensibleFeatures = [...features];
 
     const DexApp = await ethers.getContractFactory('DexApp');
-    const dexApp = await DexApp.deploy();
+    const dexApp = await DexApp.deploy({nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});
     await dexApp.deployed();
     const costForDexApp = await getTransactionCost(dexApp.deployTransaction);
     totalCost = totalCost.add(ethers.utils.parseEther(costForDexApp));
@@ -294,7 +321,7 @@ let featuresBundle;
 
 
     const ERC20App = await ethers.getContractFactory('ERC20App');
-    const erc20App = await ERC20App.deploy();
+    const erc20App = await ERC20App.deploy({nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});
     await erc20App.deployed();
     const costForERC20App = await getTransactionCost(erc20App.deployTransaction);
     totalCost = totalCost.add(ethers.utils.parseEther(costForERC20App));
@@ -305,7 +332,8 @@ let featuresBundle;
         functionSelectors: getSelectors(erc20App)
     });
 
-    const createDomainTx2 = await vickAiDomainManagerFeature.createDomain(addressVickAiSubdomain, "TokenSeed", extensibleFeatures, vickSeedTokenArgs);
+    const createDomainTx2 = await vickAiDomainManagerFeature.createDomain(addressVickAiSubdomain, "TokenSeed", extensibleFeatures, vickSeedTokenArgs, {nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});
+
     const costCreateDomainTx2 = await getTransactionCost(createDomainTx2);
     totalCost = totalCost.add(ethers.utils.parseEther(costCreateDomainTx2));
     const addressVickAiTokenSeedDomain = await vickAiDomainManagerFeature.getDomainAddress(0); // Assuming index 2 because Genesis is at index 0 and Plugfy is at index 1
@@ -339,14 +367,14 @@ let featuresBundle;
     //    to: addressVickAiTokenSeedDomain,
     //    value: ethers.utils.parseEther('10')
     //  });
-    //  await tx.wait();
+    //  await tx.wait(1);
     //  const costTransfer = await getTransactionCost(tx);
     //  console.log(`                   -> Sent 10 ETH to address: ${addressVickAiTokenSeedDomain} at a cost of: ${costTransfer} ETH`);
     //  totalCost = totalCost.add(ethers.utils.parseEther(costTransfer));
 
     // //const admin = "0x0F884EB5f6C96E524af72B7b68E34B73B73Da411";
     // const sendTokensTx = await vickAiERC20TokenSeedFeature.transfer(admin.address, ethers.utils.parseUnits('10', 18));  // assuming 18 decimals
-    // await sendTokensTx.wait();
+    // await sendTokensTx.wait(1);
     // const costForTokenTransfer = await getTransactionCost(sendTokensTx);
     // totalCost = totalCost.add(ethers.utils.parseEther(costForTokenTransfer));
     // console.log(`                   -> Sent 10 VICK-S to admin address: ${admin.address} at a cost of: ${costForTokenTransfer} ETH`);
@@ -355,7 +383,7 @@ let featuresBundle;
     console.log(`               -> DexApp feature deployed: ${dexApp.address} at a cost of: ${costForDexApp} ETH`);    
     const dexAppFeature = await ethers.getContractAt('DexApp', addressVickAiTokenSeedDomain);
 
-    const initDexTx = await dexAppFeature._initDex("0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270");
+    const initDexTx = await dexAppFeature._initDex("0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270", {nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});
     const costForDexInit = await getTransactionCost(initDexTx);
     totalCost = totalCost.add(ethers.utils.parseEther(costForDexInit));
     
@@ -372,8 +400,8 @@ let featuresBundle;
           enabled: true
       }
     ]; 
-    const txDex = await dexAppFeature.createGateway(gatewayName, onlyReceiveSwapTokenAddress, routers);
-    const recipt = await txDex.wait();
+    const txDex = await dexAppFeature.createGateway(gatewayName, onlyReceiveSwapTokenAddress, routers, {nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});
+    const recipt = await txDex.wait(1);
     const gatewayId = recipt.events?.find(e => e.event === 'GatewayCreated')?.args?.gatewayId;
     const costTxDex = await getTransactionCost(txDex);
     totalCost = totalCost.add(ethers.utils.parseEther(costTxDex));
@@ -381,15 +409,15 @@ let featuresBundle;
     
     const totalTokenSupply = await vickAiERC20TokenSeedFeature.balanceOf(owner.address)
  
-    const approveTx = await vickAiERC20TokenSeedFeature.approve(dexAppFeature.address, totalTokenSupply);
-    await approveTx.wait();
+    const approveTx = await vickAiERC20TokenSeedFeature.approve(dexAppFeature.address, totalTokenSupply, {nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});
+    await approveTx.wait(1);
     const costForApproval = await getTransactionCost(approveTx);
     totalCost = totalCost.add(ethers.utils.parseEther(costForApproval));
     console.log(`                   -> Approved ${totalTokenSupply} VICK-S for DexApp at a cost of: ${costForApproval} ETH`);
 
 
-    const txDexDestination = await dexAppFeature.setTokenDestination(gatewayId, addressVickAiTokenSeedDomain, addressVickAiSubdomain);
-    await txDexDestination.wait();
+    const txDexDestination = await dexAppFeature.setTokenDestination(gatewayId, addressVickAiTokenSeedDomain, addressVickAiSubdomain, {nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});
+    await txDexDestination.wait(1);
     const costFortxDexDestination = await getTransactionCost(txDexDestination);
     totalCost = totalCost.add(ethers.utils.parseEther(costFortxDexDestination));
     console.log(`                   -> Set destination swap sales amount to ${vickAiERC20TokenSeedFeature.address} at a cost of: ${costFortxDexDestination} ETH`);
@@ -405,9 +433,10 @@ let featuresBundle;
         preOrder,
         amount,
         price,
-        tokenBurnedOnClose
+        tokenBurnedOnClose,
+        {nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))}
     );
-    await tx.wait();
+    await tx.wait(1);
     const costForOrderCreation = await getTransactionCost(tx);
     totalCost = totalCost.add(ethers.utils.parseEther(costForOrderCreation));
     
@@ -415,52 +444,52 @@ let featuresBundle;
   }
 
   // Create purchase orders based on provided information
-  await _createPurchOrder(true, ethers.utils.parseUnits("256800.00", 18), ethers.utils.parseUnits("0.200000", 18), ethers.utils.parseUnits("12840.00", 18));
-  await _createPurchOrder(true, ethers.utils.parseUnits("311261.82", 18), ethers.utils.parseUnits("0.223030", 18), ethers.utils.parseUnits("31126.18", 18));
-  await _createPurchOrder(true, ethers.utils.parseUnits("251118.75", 18), ethers.utils.parseUnits("0.259800", 18), ethers.utils.parseUnits("37667.81", 18));
-  await _createPurchOrder(true, ethers.utils.parseUnits("358291.38", 18), ethers.utils.parseUnits("0.300590", 18), ethers.utils.parseUnits("71658.28", 18));
-  await _createPurchOrder(true, ethers.utils.parseUnits("228874.07", 18), ethers.utils.parseUnits("0.392710", 18), ethers.utils.parseUnits("68662.22", 18));
-  await _createPurchOrder(true, ethers.utils.parseUnits("266026.95", 18), ethers.utils.parseUnits("0.495810", 18), ethers.utils.parseUnits("106410.78", 18));
+  await _createPurchOrder(true, ethers.utils.parseUnits("256800.00", 18), ethers.utils.parseUnits("0.200000", 18), ethers.utils.parseUnits("12840.00", 18) , owner, {nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});
+  await _createPurchOrder(true, ethers.utils.parseUnits("311261.82", 18), ethers.utils.parseUnits("0.223030", 18), ethers.utils.parseUnits("31126.18", 18) , owner, {nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});
+  await _createPurchOrder(true, ethers.utils.parseUnits("251118.75", 18), ethers.utils.parseUnits("0.259800", 18), ethers.utils.parseUnits("37667.81", 18) , owner, {nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});
+  await _createPurchOrder(true, ethers.utils.parseUnits("358291.38", 18), ethers.utils.parseUnits("0.300590", 18), ethers.utils.parseUnits("71658.28", 18) , owner, {nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});
+  await _createPurchOrder(true, ethers.utils.parseUnits("228874.07", 18), ethers.utils.parseUnits("0.392710", 18), ethers.utils.parseUnits("68662.22", 18) , owner, {nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});
+  await _createPurchOrder(true, ethers.utils.parseUnits("266026.95", 18), ethers.utils.parseUnits("0.495810", 18), ethers.utils.parseUnits("106410.78", 18), owner, {nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});
 
-  const txMinPrice = await dexAppFeature.setMinSalesPriceTokenUnit(gatewayId, addressVickAiTokenSeedDomain, 495810000000000000n);
-  await txMinPrice.wait();
+  const txMinPrice = await dexAppFeature.setMinSalesPriceTokenUnit(gatewayId, addressVickAiTokenSeedDomain, 495810000000000000n, {nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});
+  await txMinPrice.wait(1);
   const costFortxMinPrice = await getTransactionCost(txMinPrice);
   totalCost = totalCost.add(ethers.utils.parseEther(costFortxMinPrice));
   console.log(`                   -> Set min price unit Vick Seed Token on create sales order 0.49581 at a cost of: ${costFortxMinPrice} ETH`);
 
-  const txEnabledMinPrice = await dexAppFeature.setEnabledMinSalesPriceTokenUnit(gatewayId, addressVickAiTokenSeedDomain, true);
-  await txEnabledMinPrice.wait();
+  const txEnabledMinPrice = await dexAppFeature.setEnabledMinSalesPriceTokenUnit(gatewayId, addressVickAiTokenSeedDomain, true, {nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});
+  await txEnabledMinPrice.wait(1);
   const costFortxEnabledMinPrice = await getTransactionCost(txEnabledMinPrice);
   totalCost = totalCost.add(ethers.utils.parseEther(costFortxEnabledMinPrice));
   console.log(`                   -> Set enabled min price rule at a cost of: ${costFortxEnabledMinPrice} ETH`);
 
   let currentVickSOwnerBalance = await vickAiERC20TokenSeedFeature.balanceOf(owner.address);
-  const addAirDropAmount = await dexAppFeature.addAirDropAmount(gatewayId, dexAppFeature.address, currentVickSOwnerBalance);
-  await addAirDropAmount.wait();
+  const addAirDropAmount = await dexAppFeature.addAirDropAmount(gatewayId, dexAppFeature.address, currentVickSOwnerBalance, {nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});
+  await addAirDropAmount.wait(1);
   const costaddAirDropAmount = await getTransactionCost(addAirDropAmount);
   totalCost = totalCost.add(ethers.utils.parseEther(costaddAirDropAmount));
   console.log(`                   -> Added ${currentVickSOwnerBalance} VICK-S for Airdrop at a cost of: ${costaddAirDropAmount} ETH`);
 
-  const addAirDropFactor1 = await dexAppFeature.setAirdropFactor(gatewayId, vickAiERC20TokenSeedFeature.address, ethers.utils.parseUnits("100", 18), 10);
-  await addAirDropFactor1.wait();
+  const addAirDropFactor1 = await dexAppFeature.setAirdropFactor(gatewayId, vickAiERC20TokenSeedFeature.address, ethers.utils.parseUnits("100", 18), 10, {nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});
+  await addAirDropFactor1.wait(1);
   const costaddAirDropFactor1 = await getTransactionCost(addAirDropFactor1);
   totalCost = totalCost.add(ethers.utils.parseEther(costaddAirDropFactor1));
   console.log(`                   -> Added base 100 VICK-S for factor 10 on Airdrop at a cost of: ${costaddAirDropFactor1} ETH`);
 
-  const addAirDropFactor2 = await dexAppFeature.setAirdropFactor(gatewayId, vickAiERC20TokenSeedFeature.address, ethers.utils.parseUnits("250", 18), 8);
-  await addAirDropFactor2.wait();
+  const addAirDropFactor2 = await dexAppFeature.setAirdropFactor(gatewayId, vickAiERC20TokenSeedFeature.address, ethers.utils.parseUnits("250", 18), 8, {nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});
+  await addAirDropFactor2.wait(1);
   const costaddAirDropFactor2 = await getTransactionCost(addAirDropFactor2);
   totalCost = totalCost.add(ethers.utils.parseEther(costaddAirDropFactor2));
   console.log(`                   -> Added base 250 VICK-S for factor 8 on Airdrop at a cost of: ${costaddAirDropFactor2} ETH`);
   
-  const addAirDropFactor3 = await dexAppFeature.setAirdropFactor(gatewayId, vickAiERC20TokenSeedFeature.address, ethers.utils.parseUnits("500", 18), 6);
-  await addAirDropFactor3.wait();
+  const addAirDropFactor3 = await dexAppFeature.setAirdropFactor(gatewayId, vickAiERC20TokenSeedFeature.address, ethers.utils.parseUnits("500", 18), 6, {nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});
+  await addAirDropFactor3.wait(1);
   const costaddAirDropFactor3 = await getTransactionCost(addAirDropFactor3);
   totalCost = totalCost.add(ethers.utils.parseEther(costaddAirDropFactor3));
   console.log(`                   -> Added base 500 VICK-S for factor 6 on Airdrop at a cost of: ${costaddAirDropFactor3} ETH`);
   
-  const addAirDropFactor4 = await dexAppFeature.setAirdropFactor(gatewayId, vickAiERC20TokenSeedFeature.address, ethers.utils.parseUnits("1000", 18), 4);
-  await addAirDropFactor4.wait();
+  const addAirDropFactor4 = await dexAppFeature.setAirdropFactor(gatewayId, vickAiERC20TokenSeedFeature.address, ethers.utils.parseUnits("1000", 18), 4, {nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});
+  await addAirDropFactor4.wait(1);
   const costaddAirDropFactor4 = await getTransactionCost(addAirDropFactor4);
   totalCost = totalCost.add(ethers.utils.parseEther(costaddAirDropFactor4));
   console.log(`                   -> Added base 1000 VICK-S for factor 4 on Airdrop at a cost of: ${costaddAirDropFactor4} ETH`);  
@@ -473,7 +502,7 @@ let featuresBundle;
 //  //Approve the DEX contract to spend the required amount of USDC on behalf of the Admin
  
 //  const approveTx2 = await USDCContract.connect(admin).approve(vickAiERC20TokenSeedFeature.address, requiredUSDC);
-//  await approveTx2.wait();
+//  await approveTx2.wait(1);
 //  const costForApproval2 = await getTransactionCost(approveTx2);
 //  totalCost = totalCost.add(ethers.utils.parseEther(costForApproval));
 //  console.log(`                     -> Approved DexApp to spend ${requiredUSDC} USDC at a cost of: ${costForApproval2} ETH`);
@@ -488,7 +517,7 @@ let featuresBundle;
 //      admin.address, // tokens will be sent to the admin address
 //      ethers.constants.AddressZero // No airdrop
 //  );
-//  await purchaseTx.wait();
+//  await purchaseTx.wait(1);
 //  const costForPurchase = await getTransactionCost(purchaseTx);
 //  totalCost = totalCost.add(ethers.utils.parseEther(costForPurchase));
 //  let balanceAdmin0 = await vickAiERC20TokenSeedFeature.balanceOf(admin.address);
@@ -496,7 +525,7 @@ let featuresBundle;
     
 //  const totalTokenSupply2 = await vickAiERC20TokenSeedFeature.balanceOf(admin.address) 
 //  const approveTx4 = await vickAiERC20TokenSeedFeature.connect(admin).approve(dexAppFeature.address, totalTokenSupply2);
-//  await approveTx4.wait();
+//  await approveTx4.wait(1);
 //  const costForApproval4 = await getTransactionCost(approveTx4);
 //  totalCost = totalCost.add(ethers.utils.parseEther(costForApproval4));
 //  console.log(`                   -> Approved ${totalTokenSupply2} VICK-S for DexApp at a cost of: ${costForApproval4} ETH`);
@@ -509,7 +538,7 @@ let featuresBundle;
 
     // const WMaticContract = await ethers.getContractAt('IERC20', '0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270'); // The address of Wmatic
     // const approveWMATICTx2 = await WMaticContract.connect(admin).approve(vickAiERC20TokenSeedFeature.address, ethers.utils.parseEther('1000'));
-    // await approveWMATICTx2.wait();
+    // await approveWMATICTx2.wait(1);
     // const costForApprovalWMATIC2 = await getTransactionCost(approveWMATICTx2);
     // totalCost = totalCost.add(ethers.utils.parseEther(costForApprovalWMATIC2));
     // console.log(`                     -> Approved DexApp ${ethers.utils.parseEther('10')} WMATIC a cost of: ${costForApprovalWMATIC2} ETH`);
@@ -523,7 +552,7 @@ let featuresBundle;
 //      admin.address, // tokens will be sent to the admin address
 //      ethers.constants.AddressZero // No airdrop
 //  );
-//  await purchaseTx.wait();
+//  await purchaseTx.wait(1);
 //  const costForPurchase = await getTransactionCost(purchaseTx);
 //  totalCost = totalCost.add(ethers.utils.parseEther(costForPurchase));
 //  console.log(`                     -> Admin purchased 1000 Vick-S tokens at a cost of: ${costForPurchase} ETH`);
@@ -532,7 +561,7 @@ let featuresBundle;
 //   const swapTx = await dexAppFeature.connect(admin).swapNativeToken(gatewayId, vickAiERC20TokenSeedFeature.address, owner.address, {
 //       value: ethers.utils.parseEther('4450')
 //   });
-//   await swapTx.wait();
+//   await swapTx.wait(1);
   
 //    const costForSwap = await getTransactionCost(swapTx);
 //    totalCost = totalCost.add(ethers.utils.parseEther(costForSwap));
@@ -542,7 +571,7 @@ let featuresBundle;
 //    const swapTx2 = await dexAppFeature.connect(admin).swapNativeToken(gatewayId, vickAiERC20TokenSeedFeature.address, owner.address, {
 //     value: ethers.utils.parseEther('4450')
 // });
-// await swapTx2.wait();
+// await swapTx2.wait(1);
 
 //  const costForSwap2 = await getTransactionCost(swapTx2);
 //  totalCost = totalCost.add(ethers.utils.parseEther(costForSwap2));
@@ -563,7 +592,7 @@ let featuresBundle;
 
 //  const AAVEContract = await ethers.getContractAt('ERC20', '0xd6df932a45c0f255f85145f286ea0b292b21c90b'); // AAVE
 //  const approveTx3 = await AAVEContract.connect(owner).approve(vickAiERC20TokenSeedFeature.address, firstQuote.tokenInAmount);
-//  await approveTx3.wait();
+//  await approveTx3.wait(1);
 //  const costForApproval3 = await getTransactionCost(approveTx3);
 //  totalCost = totalCost.add(ethers.utils.parseEther(costForApproval3));
 //  console.log(`                     -> Approved DexApp to spend ${firstQuote.tokenInAmount} AAVE at a cost of: ${costForApproval3} ETH`);
@@ -579,7 +608,7 @@ let featuresBundle;
 // );
 
 
-// await purchaseTx2.wait();
+// await purchaseTx2.wait(1);
 // const costForPurchase2 = await getTransactionCost(purchaseTx2);
 // totalCost = totalCost.add(ethers.utils.parseEther(costForPurchase2));
 // let balanceOwner0 = await vickAiERC20TokenSeedFeature.balanceOf(owner.address);

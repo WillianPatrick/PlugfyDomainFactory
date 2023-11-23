@@ -1,10 +1,8 @@
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.17;\n\n// SPDX-License-Identifier: MIT
+
 
 import {LibDomain} from "../../../libraries/LibDomain.sol";
 import {IAdminApp} from "./IAdminApp.sol";
-import { IReentrancyGuardApp } from "./IReentrancyGuardApp.sol";
-
 
 library LibAdmin {
     bytes32 constant DOMAIN_STORAGE_POSITION = keccak256("admin.standard.storage");
@@ -30,28 +28,21 @@ contract AdminApp is IAdminApp {
 
         IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("_initAdminApp()"))), LibDomain.DEFAULT_ADMIN_ROLE);
         IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("grantRole(bytes32,address)"))), LibDomain.DEFAULT_ADMIN_ROLE);
+        //IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("revokeRole(bytes32,address)"))), LibDomain.DEFAULT_ADMIN_ROLE);
         IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("setRoleAdmin(bytes32,bytes32)"))), LibDomain.DEFAULT_ADMIN_ROLE);
+//        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("setFunctionRole(bytes4,bytes32)"))), LibDomain.DEFAULT_ADMIN_ROLE);
+  //      IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("removeFunctionRole(bytes4)"))), LibDomain.DEFAULT_ADMIN_ROLE);
         IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("pauseDomain()"))), PAUSER_ROLE);
         IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("unpauseDomain()"))), PAUSER_ROLE);
         IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("pauseFeatures(address[])"))), PAUSER_ROLE);
         IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("unpauseFeatures(address[])"))), PAUSER_ROLE);
 
-        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("transferOwnership(address)"))), true);
-        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("grantRole(bytes32,address)"))), true);
-        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("revokeRole(bytes32,address)"))), true);
-        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("setRoleAdmin(bytes32,bytes32)"))), true);
-        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("pauseDomain()"))), true);
-        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("unpauseDomain()"))), true);
-        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("pauseFeatures(address[])"))), true);
-        IReentrancyGuardApp(address(this)).enableDisabledFunctionReentrancyGuard(bytes4(keccak256(bytes("unpauseFeatures(address[])"))), true);
-
-    ds.initialized = true;        
-
         ds.initialized = true;
     }
 
+
+
     function transferOwnership(address _newOwner) external {
-        require(_newOwner != address(0), "AdminApp: new owner is the zero address");
         LibDomain.enforceIsContractOwnerAdmin();
         LibDomain.setContractOwner(_newOwner);
     }
