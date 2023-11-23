@@ -1,6 +1,4 @@
-pragma solidity ^0.8.17;
-
-import { LibDomain } from "../../../libraries/LibDomain.sol";
+pragma solidity ^0.8.17;\n\nimport { LibDomain } from "../../../libraries/LibDomain.sol";
 import { IReentrancyGuardApp } from "./IReentrancyGuardApp.sol";
 import { IAdminApp } from "./IAdminApp.sol";
 
@@ -142,7 +140,7 @@ contract ReentrancyGuardApp is IReentrancyGuardApp{
         assembly {
             result := mload(add(input, 32))
         }
-        output = (result != 0);  
+        output = (result != 0);  // Convert to bool
     }
 
 

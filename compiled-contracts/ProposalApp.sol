@@ -1,11 +1,151 @@
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.17;\n\n// SPDX-License-Identifier: MIT
+// OpenZeppelin Contracts (last updated v4.9.0) (token/ERC20/IERC20.sol)
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "../../../Domain.sol";
-import "../AccessControl/AdminApp.sol";
-import "../AccessControl/IAdminApp.sol";
-import "../AccessControl/IReentrancyGuardApp.sol";
+
+
+/**
+ * @dev Interface of the ERC20 standard as defined in the EIP.
+ */
+interface IERC20 {
+    /**
+     * @dev Emitted when `value` tokens are moved from one account (`from`) to
+     * another (`to`).
+     *
+     * Note that `value` may be zero.
+     */
+    event Transfer(address indexed from, address indexed to, uint256 value);
+
+    /**
+     * @dev Emitted when the allowance of a `spender` for an `owner` is set by
+     * a call to {approve}. `value` is the new allowance.
+     */
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+
+    /**
+     * @dev Returns the amount of tokens in existence.
+     */
+    function totalSupply() external view returns (uint256);
+
+    /**
+     * @dev Returns the amount of tokens owned by `account`.
+     */
+    function balanceOf(address account) external view returns (uint256);
+
+    /**
+     * @dev Moves `amount` tokens from the caller's account to `to`.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * Emits a {Transfer} event.
+     */
+    function transfer(address to, uint256 amount) external returns (bool);
+
+    /**
+     * @dev Returns the remaining number of tokens that `spender` will be
+     * allowed to spend on behalf of `owner` through {transferFrom}. This is
+     * zero by default.
+     *
+     * This value changes when {approve} or {transferFrom} are called.
+     */
+    function allowance(address owner, address spender) external view returns (uint256);
+
+    /**
+     * @dev Sets `amount` as the allowance of `spender` over the caller's tokens.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * IMPORTANT: Beware that changing an allowance with this method brings the risk
+     * that someone may use both the old and the new allowance by unfortunate
+     * transaction ordering. One possible solution to mitigate this race
+     * condition is to first reduce the spender's allowance to 0 and set the
+     * desired value afterwards:
+     * https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729
+     *
+     * Emits an {Approval} event.
+     */
+    function approve(address spender, uint256 amount) external returns (bool);
+
+    /**
+     * @dev Moves `amount` tokens from `from` to `to` using the
+     * allowance mechanism. `amount` is then deducted from the caller's
+     * allowance.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * Emits a {Transfer} event.
+     */
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+}\n\n// SPDX-License-Identifier: MIT
+
+
+struct roleAccount {
+    string name;
+    bytes32 role;
+    address account;
+}
+interface IAdminApp {
+    function hasRole(bytes32 role, address account) external view returns (bool);
+
+    function grantRole(bytes32 role, address account) external;
+
+    function getRoleHash32(string memory str) external pure returns (bytes32);
+    function getRoleHash4(string memory str) external pure returns (bytes4);
+    function revokeRole(bytes32 role, address account) external;
+
+    function renounceRole(bytes32 role) external;
+
+    function setRoleAdmin(bytes32 role, bytes32 adminRole) external;
+
+    function getRoleAdmin(bytes32 role) external view returns (bytes32);
+
+    function setFunctionRole(bytes4 functionSelector, bytes32 role) external;
+
+    function removeFunctionRole(bytes4 functionSelector, bool noError) external;
+
+    function pauseDomain() external;
+
+    function unpauseDomain() external;
+
+    function pauseFeatures(address[] memory _featureAddress) external;
+
+    function unpauseFeatures(address[] memory _featureAddress) external;
+
+}\n\n// SPDX-License-Identifier: MIT
+
+
+interface IReentrancyGuardApp {
+
+
+    function enableDisabledDomainReentrancyGuard(bool status) external;
+
+    function enableDisabledFeatureReentrancyGuard(address feature, bool status) external;
+
+    function enableDisabledFunctionReentrancyGuard(bytes4 functionSelector, bool status) external;
+
+    function enableDisabledSenderReentrancyGuard(bool status) external;
+
+    function isDomainReentrancyGuardEnabled() external view returns (bool);
+
+    function isFeatureReentrancyGuardEnabled(address feature) external view returns (bool);
+
+    function isFunctionReentrancyGuardEnabled(bytes4 functionSelector) external view returns (bool);
+
+    function isSenderReentrancyGuardEnabled() external view returns (bool);    
+
+    function getDomainLock() external view returns (uint256);
+
+    function getFeatureLock(address feature) external view returns (uint256);
+
+    function getFunctionLock(bytes4 functionSelector) external view returns (uint256);
+
+    function getSenderLock(address sender) external view returns (uint256);    
+   
+}\n\n// SPDX-License-Identifier: MIT
+
+
+
+
+
 
 library LibProposal {
     bytes32 constant PROPOSAL_STORAGE_POSITION = keccak256("proposal.feature.storage");
@@ -67,10 +207,11 @@ library LibProposal {
 }
 
 contract ProposalApp {
-    bytes32 public constant PROPOSAL_CREATOR_ROLE = keccak256("PROPOSAL_CREATOR_ROLE");
-    bytes32 public constant PROPOSAL_APPROVER_ROLE = keccak256("PROPOSAL_APPROVER_ROLE");
-    bytes32 public constant VOTING_MEMBER_ROLE = keccak256("VOTING_MEMBER_ROLE");
-    bytes32 public constant COUNCIL_ROLE = keccak256("COUNCIL_ROLE");
+    bytes32 constant DEFAULT_ADMIN_ROLE = keccak256("DEFAULT_ADMIN_ROLE");
+    bytes32 constant PROPOSAL_CREATOR_ROLE = keccak256("PROPOSAL_CREATOR_ROLE");
+    bytes32 constant PROPOSAL_APPROVER_ROLE = keccak256("PROPOSAL_APPROVER_ROLE");
+    bytes32 constant VOTING_MEMBER_ROLE = keccak256("VOTING_MEMBER_ROLE");
+    bytes32 constant COUNCIL_ROLE = keccak256("COUNCIL_ROLE");
 
     using LibProposal for LibProposal.ProposalStorage;
 
@@ -83,14 +224,20 @@ contract ProposalApp {
     function _initProposalApp() public {
         require(!LibProposal.proposalStorage().initialized, "Initialization has already been executed.");
 
-        IAdminApp(address(this)).grantRole(LibDomain.DEFAULT_ADMIN_ROLE, msg.sender);
+        IAdminApp(address(this)).setRoleAdmin(DEFAULT_ADMIN_ROLE, DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setRoleAdmin(PROPOSAL_CREATOR_ROLE, DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setRoleAdmin(PROPOSAL_APPROVER_ROLE, DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setRoleAdmin(VOTING_MEMBER_ROLE, DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setRoleAdmin(COUNCIL_ROLE, DEFAULT_ADMIN_ROLE);
+
+        IAdminApp(address(this)).grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         IAdminApp(address(this)).grantRole(PROPOSAL_CREATOR_ROLE, msg.sender);
         IAdminApp(address(this)).grantRole(PROPOSAL_APPROVER_ROLE, msg.sender);
         IAdminApp(address(this)).grantRole(VOTING_MEMBER_ROLE, msg.sender);
         IAdminApp(address(this)).grantRole(COUNCIL_ROLE, msg.sender);        
 
         // Definindo funções específicas para funções
-        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("_initProposalFacet()"))), LibDomain.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("_initProposalFacet()"))), DEFAULT_ADMIN_ROLE);
         IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("createProposal(address,uint256,address,address,LibProposal.ActionPlan[],uint256,uint256,uint256,address payable,bool)"))), PROPOSAL_CREATOR_ROLE);
         IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("approveProposalForVoting(uint256)"))), PROPOSAL_APPROVER_ROLE);
         IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("rejectProposal(uint256)"))), PROPOSAL_APPROVER_ROLE);
@@ -120,32 +267,30 @@ contract ProposalApp {
         bool isFutureReserve
     ) public returns (uint256) {
         LibProposal.ProposalStorage storage ps = LibProposal.proposalStorage();
-        
-        ps.proposalCount++;
-        LibProposal.Proposal memory newProposal = LibProposal.Proposal({
-            id: ps.proposalCount,
-            tokenAddress: tokenAddress,
-            requiredAmount: requiredAmount,
-            objective: objective,
-            strategy: strategy,
-            plans: plans,
-            totalBudget: totalBudget,
-            releaseAmount: releaseAmount,
-            deadline: deadline,
-            proposer: msg.sender,
-            status: LibProposal.ProposalStatus.PendingApproval,
-            yesVotes: 0,
-            noVotes: 0,
-            fundingAddress: fundingAddr,
-            fundedAmount: 0,
-            reservedAmount: 0,
-            isFutureReserve: isFutureReserve
-        });
 
-        ps.proposals[ps.proposalCount] = newProposal;
+        ps.proposalCount++;
+        LibProposal.Proposal storage newProposal = ps.proposals[ps.proposalCount];
+
+        newProposal.id = ps.proposalCount;
+        newProposal.tokenAddress = tokenAddress;
+        newProposal.requiredAmount = requiredAmount;
+        newProposal.objective = objective;
+        newProposal.strategy = strategy;
+        for (uint i = 0; i < plans.length; i++) {
+            newProposal.plans.push(plans[i]);
+        }
+        newProposal.totalBudget = totalBudget;
+        newProposal.releaseAmount = releaseAmount;
+        newProposal.deadline = deadline;
+        newProposal.proposer = msg.sender;
+        newProposal.status = LibProposal.ProposalStatus.PendingApproval;
+        newProposal.fundingAddress = fundingAddr;
+        newProposal.isFutureReserve = isFutureReserve;
+
         emit ProposalCreated(ps.proposalCount, msg.sender);
         return ps.proposalCount;
     }
+
 
     function approveProposalForVoting(uint256 proposalId) public {
         LibProposal.ProposalStorage storage ps = LibProposal.proposalStorage();

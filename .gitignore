@@ -13,3 +13,6 @@ artifacts
 .deps
 .git
 artifacts
+arguments.js
+hardhat.config.ts
+scripts/deploy.js
