@@ -142,7 +142,7 @@ contract ReentrancyGuardApp is IReentrancyGuardApp{
         assembly {
             result := mload(add(input, 32))
         }
-        output = (result != 0);  // Convert to bool
+        output = (result != 0);  
     }
 
 

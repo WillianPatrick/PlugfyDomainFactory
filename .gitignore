@@ -14,3 +14,8 @@ artifacts
 .git
 artifacts
 arguments.js
+<<<<<<< HEAD
+=======
+hardhat.config.ts
+scripts/deploy.js
+>>>>>>> eca2bdda5e0123fed924b33d389605366b435328

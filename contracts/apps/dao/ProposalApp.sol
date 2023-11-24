@@ -2,10 +2,8 @@
 pragma solidity ^0.8.17;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "../../../Domain.sol";
-import "../AccessControl/AdminApp.sol";
-import "../AccessControl/IAdminApp.sol";
-import "../AccessControl/IReentrancyGuardApp.sol";
+import "../core/AccessControl/IAdminApp.sol";
+import "../core/AccessControl/IReentrancyGuardApp.sol";
 
 library LibProposal {
     bytes32 constant PROPOSAL_STORAGE_POSITION = keccak256("proposal.feature.storage");
@@ -67,10 +65,11 @@ library LibProposal {
 }
 
 contract ProposalApp {
-    bytes32 public constant PROPOSAL_CREATOR_ROLE = keccak256("PROPOSAL_CREATOR_ROLE");
-    bytes32 public constant PROPOSAL_APPROVER_ROLE = keccak256("PROPOSAL_APPROVER_ROLE");
-    bytes32 public constant VOTING_MEMBER_ROLE = keccak256("VOTING_MEMBER_ROLE");
-    bytes32 public constant COUNCIL_ROLE = keccak256("COUNCIL_ROLE");
+    bytes32 constant DEFAULT_ADMIN_ROLE = keccak256("DEFAULT_ADMIN_ROLE");
+    bytes32 constant PROPOSAL_CREATOR_ROLE = keccak256("PROPOSAL_CREATOR_ROLE");
+    bytes32 constant PROPOSAL_APPROVER_ROLE = keccak256("PROPOSAL_APPROVER_ROLE");
+    bytes32 constant VOTING_MEMBER_ROLE = keccak256("VOTING_MEMBER_ROLE");
+    bytes32 constant COUNCIL_ROLE = keccak256("COUNCIL_ROLE");
 
     using LibProposal for LibProposal.ProposalStorage;
 
@@ -83,14 +82,20 @@ contract ProposalApp {
     function _initProposalApp() public {
         require(!LibProposal.proposalStorage().initialized, "Initialization has already been executed.");
 
-        IAdminApp(address(this)).grantRole(LibDomain.DEFAULT_ADMIN_ROLE, msg.sender);
+        IAdminApp(address(this)).setRoleAdmin(DEFAULT_ADMIN_ROLE, DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setRoleAdmin(PROPOSAL_CREATOR_ROLE, DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setRoleAdmin(PROPOSAL_APPROVER_ROLE, DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setRoleAdmin(VOTING_MEMBER_ROLE, DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setRoleAdmin(COUNCIL_ROLE, DEFAULT_ADMIN_ROLE);
+
+        IAdminApp(address(this)).grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         IAdminApp(address(this)).grantRole(PROPOSAL_CREATOR_ROLE, msg.sender);
         IAdminApp(address(this)).grantRole(PROPOSAL_APPROVER_ROLE, msg.sender);
         IAdminApp(address(this)).grantRole(VOTING_MEMBER_ROLE, msg.sender);
         IAdminApp(address(this)).grantRole(COUNCIL_ROLE, msg.sender);        
 
         // Definindo funções específicas para funções
-        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("_initProposalFacet()"))), LibDomain.DEFAULT_ADMIN_ROLE);
+        IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("_initProposalFacet()"))), DEFAULT_ADMIN_ROLE);
         IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("createProposal(address,uint256,address,address,LibProposal.ActionPlan[],uint256,uint256,uint256,address payable,bool)"))), PROPOSAL_CREATOR_ROLE);
         IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("approveProposalForVoting(uint256)"))), PROPOSAL_APPROVER_ROLE);
         IAdminApp(address(this)).setFunctionRole(bytes4(keccak256(bytes("rejectProposal(uint256)"))), PROPOSAL_APPROVER_ROLE);
@@ -120,32 +125,30 @@ contract ProposalApp {
         bool isFutureReserve
     ) public returns (uint256) {
         LibProposal.ProposalStorage storage ps = LibProposal.proposalStorage();
-        
-        ps.proposalCount++;
-        LibProposal.Proposal memory newProposal = LibProposal.Proposal({
-            id: ps.proposalCount,
-            tokenAddress: tokenAddress,
-            requiredAmount: requiredAmount,
-            objective: objective,
-            strategy: strategy,
-            plans: plans,
-            totalBudget: totalBudget,
-            releaseAmount: releaseAmount,
-            deadline: deadline,
-            proposer: msg.sender,
-            status: LibProposal.ProposalStatus.PendingApproval,
-            yesVotes: 0,
-            noVotes: 0,
-            fundingAddress: fundingAddr,
-            fundedAmount: 0,
-            reservedAmount: 0,
-            isFutureReserve: isFutureReserve
-        });
 
-        ps.proposals[ps.proposalCount] = newProposal;
+        ps.proposalCount++;
+        LibProposal.Proposal storage newProposal = ps.proposals[ps.proposalCount];
+
+        newProposal.id = ps.proposalCount;
+        newProposal.tokenAddress = tokenAddress;
+        newProposal.requiredAmount = requiredAmount;
+        newProposal.objective = objective;
+        newProposal.strategy = strategy;
+        for (uint i = 0; i < plans.length; i++) {
+            newProposal.plans.push(plans[i]);
+        }
+        newProposal.totalBudget = totalBudget;
+        newProposal.releaseAmount = releaseAmount;
+        newProposal.deadline = deadline;
+        newProposal.proposer = msg.sender;
+        newProposal.status = LibProposal.ProposalStatus.PendingApproval;
+        newProposal.fundingAddress = fundingAddr;
+        newProposal.isFutureReserve = isFutureReserve;
+
         emit ProposalCreated(ps.proposalCount, msg.sender);
         return ps.proposalCount;
     }
+
 
     function approveProposalForVoting(uint256 proposalId) public {
         LibProposal.ProposalStorage storage ps = LibProposal.proposalStorage();
