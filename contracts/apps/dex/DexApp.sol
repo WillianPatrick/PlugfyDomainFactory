@@ -424,7 +424,9 @@ contract DexApp  {
             } else {
                 if (remainingValueInAcceptedToken> 0) { 
                     uint256 partialOrderAmount = (remainingValueInAcceptedToken / (order.price / 10**diffTokenDecimals)) * 10**ERC20(order.salesTokenAddress).decimals();
-                    ds.totalCapAcceptedToken[gatewayId][salesTokenAddress] += remainingValueInAcceptedToken;
+                    uint256 partialOrderValueAmount = partialOrderAmount * order.price / 10**ERC20(order.salesTokenAddress).decimals();
+                    remainingValueInAcceptedToken -= partialOrderValueAmount;
+                    ds.totalCapAcceptedToken[gatewayId][salesTokenAddress] += partialOrderValueAmount;
                     IERC20(order.salesTokenAddress).approve(toAddress, partialOrderAmount);
                     IERC20(order.salesTokenAddress).transferFrom(address(this), toAddress, partialOrderAmount);
                     processAirdrop(gatewayId, salesTokenAddress, airdropOriginAddress, partialOrderAmount); 
@@ -433,19 +435,19 @@ contract DexApp  {
                     order.amount -= partialOrderAmount;
                     if(order.preOrder){     
                         if(ds.preOrder[gatewayId][salesTokenAddress] > 0){                       
-                            ERC20(gateway.onlyReceiveSwapTokenAddres).transfer(ds.destination[gatewayId][salesTokenAddress],  remainingValueInAcceptedToken);                         
+                            ERC20(gateway.onlyReceiveSwapTokenAddres).transfer(ds.destination[gatewayId][salesTokenAddress],  partialOrderValueAmount);                         
                         }
                         else{  
-                            ERC20(gateway.onlyReceiveSwapTokenAddres).transfer(order.owner,  remainingValueInAcceptedToken);     
+                            ERC20(gateway.onlyReceiveSwapTokenAddres).transfer(order.owner,  partialOrderValueAmount);     
                         }
                     }                    
                 }
-                remainingValueInAcceptedToken= 0;
             }           
         }
 
         if (remainingValueInAcceptedToken > 0) {
-            ERC20(gateway.onlyReceiveSwapTokenAddres).transfer(toAddress, remainingValueInAcceptedToken);            
+            ERC20(gateway.onlyReceiveSwapTokenAddres).transfer(toAddress, remainingValueInAcceptedToken);     
+            remainingValueInAcceptedToken = 0;       
         }
 
         if (ds.preOrder[gatewayId][salesTokenAddress] == 0) {
