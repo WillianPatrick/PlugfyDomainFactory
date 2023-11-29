@@ -19,3 +19,6 @@ arguments.js
 hardhat.config.ts
 scripts/deploy.js
 >>>>>>> eca2bdda5e0123fed924b33d389605366b435328
+scripts/test.js
+scripts/libraries/domain.ts
+scripts/update_dexapp_v2.js

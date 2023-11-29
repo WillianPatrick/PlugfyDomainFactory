@@ -108,13 +108,12 @@ contract DexApp  {
         _;
     }    
     
-  
     event GatewayCreated(bytes32 gatewayId, string gatewayName);
     event OrderCreated(address indexed owner, address salesTokenAddress, uint256 amount, uint256 price, bool isSellOrder);
     event OrderCanceled(address indexed owner, uint256 orderIndex);
     event OrderExecuted(address indexed buyer, address indexed seller, uint256 amount, uint256 price);
     event TokensClaimed(address indexed claimer, uint256 amount);
-    event Log(uint256 message);
+
     function _initDex(address _nativeTokenAddress) public {
         LibDex.DexStorage storage ds = LibDex.domainStorage();
         require(!ds.initialized, "Initialization has already been executed.");
@@ -233,7 +232,6 @@ contract DexApp  {
         return ds.maxSalesPriceTokenUnit[gatewayId][salesTokenAddress];
     }    
         
-
     function getSwapQuote(bytes32 gatewayId, address tokenIn, uint256 tokenInAmount) external view returns (LibDex.Quote[] memory) {
         LibDex.DexStorage storage ds = LibDex.domainStorage();
         LibDex.Gateway storage gateway = ds.gateways[gatewayId];        
@@ -381,32 +379,33 @@ contract DexApp  {
         require(remainingValueInAcceptedToken> 0, "Balance inaccepted token not enough for the exchange.");
         uint256 diffTokenDecimals = ERC20(salesTokenAddress).decimals() - ERC20(gateway.onlyReceiveSwapTokenAddres).decimals();
 
-        while (remainingValueInAcceptedToken> 0 && ds.sellOrders[gatewayId][salesTokenAddress].length > 0) {
+        while (remainingValueInAcceptedToken > 0 && ds.sellOrders[gatewayId][salesTokenAddress].length > 0) {
             LibDex.Order storage order = ds.sellOrders[gatewayId][salesTokenAddress][0];
-            uint256 orderValueInAcceptedToken= (order.amount / 10**ERC20(salesTokenAddress).decimals()) * (order.price / 10**diffTokenDecimals);
-            if (orderValueInAcceptedToken<= remainingValueInAcceptedToken) {
-
+            uint256 orderValueInUSD = (order.amount * order.price) / 10**(diffTokenDecimals+ERC20(salesTokenAddress).decimals());
+            if (orderValueInUSD <= remainingValueInAcceptedToken) {
+                ds.totalCapAcceptedToken[gatewayId][salesTokenAddress] += orderValueInUSD;
                 if(order.preOrder){     
                     if(ds.preOrder[gatewayId][salesTokenAddress] > 0){                    
-                        ERC20(gateway.onlyReceiveSwapTokenAddres).transfer(ds.destination[gatewayId][salesTokenAddress],  orderValueInAcceptedToken);
+                        ERC20(gateway.onlyReceiveSwapTokenAddres).transfer(ds.destination[gatewayId][salesTokenAddress],  orderValueInUSD);
                     }
                     else{
-                        ERC20(gateway.onlyReceiveSwapTokenAddres).transfer(order.owner,  orderValueInAcceptedToken);
+                        ERC20(gateway.onlyReceiveSwapTokenAddres).transfer(order.owner,  orderValueInUSD);
                     }
                 }
-
-                ds.totalCapAcceptedToken[gatewayId][salesTokenAddress] += orderValueInAcceptedToken;
-                IERC20(order.salesTokenAddress).approve(toAddress, order.amount);
-                IERC20(order.salesTokenAddress).transferFrom(address(this), toAddress, order.amount); 
                 processAirdrop(gatewayId, salesTokenAddress, airdropOriginAddress, order.amount); 
+                IERC20(order.salesTokenAddress).approve(toAddress, order.amount);
+                IERC20(order.salesTokenAddress).transferFrom(address(this), toAddress, order.amount);
                 ds.totalSoldTokens[gatewayId][salesTokenAddress] += order.amount;
                 ds.totalShellOfferTokens[gatewayId][salesTokenAddress] -= order.amount;
-                remainingValueInAcceptedToken-= orderValueInAcceptedToken;
+                remainingValueInAcceptedToken -= orderValueInUSD;
                 if(order.preOrder){
                     ds.preOrder[gatewayId][salesTokenAddress]--;
                 }
+                ds.currentOrder[gatewayId][salesTokenAddress]++;
                 if (order.burnTokensClose > 0) {
                     if (ds.preOrder[gatewayId][salesTokenAddress] == 0 && ds.airdropAmount[gatewayId][salesTokenAddress] > 0) {
+                        ds.currentOrder[gatewayId][salesTokenAddress] = 0;
+                        ds.preOrder[gatewayId][salesTokenAddress]
                         order.burnTokensClose += ds.airdropAmount[gatewayId][salesTokenAddress];
                         ds.airdropAmount[gatewayId][salesTokenAddress] = 0;                        
                     }                   
@@ -415,39 +414,41 @@ contract DexApp  {
                     order.burnTokensClose = 0;
                 }
 
-                ds.currentOrder[gatewayId][salesTokenAddress]++;
-
-                for (uint i = 0; i < ds.sellOrders[gatewayId][salesTokenAddress].length - 1; i++) {
+                for (uint256 i = 0; i < ds.sellOrders[gatewayId][salesTokenAddress].length - 1; i++) {
                     ds.sellOrders[gatewayId][salesTokenAddress][i] = ds.sellOrders[gatewayId][salesTokenAddress][i + 1];
                 }
                 ds.sellOrders[gatewayId][salesTokenAddress].pop();
             } else {
-                if (remainingValueInAcceptedToken> 0) { 
-                    uint256 partialOrderAmount = (remainingValueInAcceptedToken / (order.price / 10**diffTokenDecimals)) * 10**ERC20(order.salesTokenAddress).decimals();
-                    uint256 partialOrderValueAmount = partialOrderAmount * order.price / 10**ERC20(order.salesTokenAddress).decimals();
-                    remainingValueInAcceptedToken -= partialOrderValueAmount;
-                    ds.totalCapAcceptedToken[gatewayId][salesTokenAddress] += partialOrderValueAmount;
-                    IERC20(order.salesTokenAddress).approve(toAddress, partialOrderAmount);
-                    IERC20(order.salesTokenAddress).transferFrom(address(this), toAddress, partialOrderAmount);
-                    processAirdrop(gatewayId, salesTokenAddress, airdropOriginAddress, partialOrderAmount); 
+                uint256 partialOrderValue = remainingValueInAcceptedToken;
+                if (remainingValueInAcceptedToken > 0) {
+                    uint256 partialOrderAmount = (remainingValueInAcceptedToken * 10**diffTokenDecimals * 10**ERC20(salesTokenAddress).decimals()) / order.price;
+                    if(partialOrderAmount > order.amount){
+                        partialOrderAmount = order.amount;
+                        remainingValueInAcceptedToken = 0;
+                        partialOrderValue = (order.amount * order.price) / 10**(diffTokenDecimals+ERC20(salesTokenAddress).decimals());
+                    }
+                    ds.totalCapAcceptedToken[gatewayId][salesTokenAddress] += remainingValueInAcceptedToken;
                     ds.totalSoldTokens[gatewayId][salesTokenAddress] += partialOrderAmount;
                     ds.totalShellOfferTokens[gatewayId][salesTokenAddress] -= partialOrderAmount;
-                    order.amount -= partialOrderAmount;
                     if(order.preOrder){     
-                        if(ds.preOrder[gatewayId][salesTokenAddress] > 0){                       
-                            ERC20(gateway.onlyReceiveSwapTokenAddres).transfer(ds.destination[gatewayId][salesTokenAddress],  partialOrderValueAmount);                         
+                        if(ds.preOrder[gatewayId][salesTokenAddress] > 0){                    
+                            ERC20(gateway.onlyReceiveSwapTokenAddres).transfer(ds.destination[gatewayId][salesTokenAddress],  partialOrderValue);
                         }
-                        else{  
-                            ERC20(gateway.onlyReceiveSwapTokenAddres).transfer(order.owner,  partialOrderValueAmount);     
+                        else{
+                            ERC20(gateway.onlyReceiveSwapTokenAddres).transfer(order.owner,  partialOrderValue);
                         }
-                    }                    
+                    }
+                    processAirdrop(gatewayId, salesTokenAddress, airdropOriginAddress, partialOrderAmount); 
+                    IERC20(order.salesTokenAddress).approve(toAddress, partialOrderAmount);
+                    IERC20(order.salesTokenAddress).transferFrom(address(this), toAddress, partialOrderAmount);
+                    order.amount -= partialOrderAmount;
                 }
-            }           
+                remainingValueInAcceptedToken -= partialOrderValue;
+            }
         }
 
         if (remainingValueInAcceptedToken > 0) {
-            ERC20(gateway.onlyReceiveSwapTokenAddres).transfer(toAddress, remainingValueInAcceptedToken);     
-            remainingValueInAcceptedToken = 0;       
+          ERC20(gateway.onlyReceiveSwapTokenAddres).transfer(toAddress, remainingValueInAcceptedToken);      
         }
 
         if (ds.preOrder[gatewayId][salesTokenAddress] == 0) {
