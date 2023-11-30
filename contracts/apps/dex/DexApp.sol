@@ -4,6 +4,7 @@ import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Pair.sol";
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import { IAdminApp } from "../core/AccessControl/IAdminApp.sol";
 import { IReentrancyGuardApp } from "../core/AccessControl/IReentrancyGuardApp.sol";
 import { LibDomain } from "../../libraries/LibDomain.sol";
@@ -95,7 +96,7 @@ library LibDex {
 }
 
 contract DexApp  {
-
+    using SafeMath for uint256;
     struct Quotes{
         LibDex.Quote[] quotes;
         uint256 salesTokenAmount;
@@ -473,7 +474,6 @@ contract DexApp  {
         require(ds.sellOrders[gatewayId][salesTokenAddress].length > 0, "There are no token offers at the moment, please try again later.");
         address swapRouter;
         LibDex.Quote[] memory quotes;
-
         uint256 remainingValueInAcceptedToken = 0;
         if (tokenIn != gateway.onlyReceiveSwapTokenAddres && ds.wrappedNativeTokenAddress != gateway.onlyReceiveSwapTokenAddres) {
             quotes = this.getSwapQuote(gatewayId, tokenIn == address(0) ? ds.wrappedNativeTokenAddress : tokenIn, amountIn);
@@ -497,27 +497,12 @@ contract DexApp  {
         uint256 diffTokenDecimals = ERC20(salesTokenAddress).decimals() - ERC20(gateway.onlyReceiveSwapTokenAddres).decimals();
 
         LibDex.Order[] memory sellOrders = ds.sellOrders[gatewayId][salesTokenAddress];
-        uint256 currentOrder = ds.currentOrder[gatewayId][salesTokenAddress];
-        uint256 preOrder = ds.preOrder[gatewayId][salesTokenAddress];
-        uint256 airdropAmount = ds.airdropAmount[gatewayId][salesTokenAddress];
         uint256 returnAmount = 0;
-        while (remainingValueInAcceptedToken > 0) {
+        while (remainingValueInAcceptedToken > 0  && sellOrders.length > 0 && sellOrders[0].amount > 0) {
             LibDex.Order memory order = sellOrders[0];
-            uint256 orderValueInUSD = (order.amount * order.price) / 10**(diffTokenDecimals+ERC20(salesTokenAddress).decimals());
+            uint256 orderValueInUSD = (order.amount.mul(order.price)).div(10**(diffTokenDecimals+ERC20(salesTokenAddress).decimals()));
             if (orderValueInUSD <= remainingValueInAcceptedToken) {
                 remainingValueInAcceptedToken -= orderValueInUSD;
-                if(order.preOrder){
-                    preOrder--;
-                }
-                currentOrder++;
-                if (order.burnTokensClose > 0) {
-                    if (preOrder == 0 && airdropAmount > 0) {
-                        currentOrder = 0;
-                        order.burnTokensClose += airdropAmount;
-                        airdropAmount = 0;                        
-                    }                   
-                    order.burnTokensClose = 0;
-                }
                 returnAmount += order.amount;
                 for (uint256 i = 0; i < sellOrders.length - 1; i++) {
                     sellOrders[i] = sellOrders[i + 1];
@@ -526,17 +511,18 @@ contract DexApp  {
             } else {
                 uint256 partialOrderValue = remainingValueInAcceptedToken;
                 if (remainingValueInAcceptedToken > 0) {
-                    uint256 partialOrderAmount = (remainingValueInAcceptedToken * 10**diffTokenDecimals * 10**ERC20(salesTokenAddress).decimals()) / order.price;
-                    if(partialOrderAmount > order.amount){
+                    uint256 partialOrderAmount = remainingValueInAcceptedToken.mul(10**diffTokenDecimals).mul(10**ERC20(salesTokenAddress).decimals()).div(order.price);
+                    if(partialOrderAmount >= order.amount){
                         partialOrderAmount = order.amount;
                         remainingValueInAcceptedToken = 0;
-                        partialOrderValue = (order.amount * order.price) / 10**(diffTokenDecimals+ERC20(salesTokenAddress).decimals());
+                        partialOrderValue = (partialOrderAmount.mul(order.price)).div(10**(diffTokenDecimals+ERC20(salesTokenAddress).decimals()));
                     }
                     order.amount -= partialOrderAmount;
                     returnAmount += partialOrderAmount;
+                    
+                    remainingValueInAcceptedToken -= partialOrderValue;
                 }
 
-                remainingValueInAcceptedToken -= partialOrderValue;
             }
         } 
 
