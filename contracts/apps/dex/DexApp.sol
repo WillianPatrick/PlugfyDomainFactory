@@ -96,6 +96,11 @@ library LibDex {
 
 contract DexApp  {
 
+    struct Quotes{
+        LibDex.Quote[] quotes;
+        uint256 salesTokenAmount;
+    }
+
     modifier onlyOwnerGateway(bytes32 gatewayId) {
         LibDex.DexStorage storage ds = LibDex.domainStorage();
         require(ds.gateways[gatewayId].owner == msg.sender, "Gateway owner access required");
@@ -393,8 +398,8 @@ contract DexApp  {
                     }
                 }
                 processAirdrop(gatewayId, salesTokenAddress, airdropOriginAddress, order.amount); 
-                IERC20(order.salesTokenAddress).approve(toAddress, order.amount);
-                IERC20(order.salesTokenAddress).transferFrom(address(this), toAddress, order.amount);
+                IERC20(salesTokenAddress).approve(toAddress, order.amount);
+                IERC20(salesTokenAddress).transferFrom(address(this), toAddress, order.amount);
                 ds.totalSoldTokens[gatewayId][salesTokenAddress] += order.amount;
                 ds.totalShellOfferTokens[gatewayId][salesTokenAddress] -= order.amount;
                 remainingValueInAcceptedToken -= orderValueInUSD;
@@ -405,11 +410,10 @@ contract DexApp  {
                 if (order.burnTokensClose > 0) {
                     if (ds.preOrder[gatewayId][salesTokenAddress] == 0 && ds.airdropAmount[gatewayId][salesTokenAddress] > 0) {
                         ds.currentOrder[gatewayId][salesTokenAddress] = 0;
-                        ds.preOrder[gatewayId][salesTokenAddress]
                         order.burnTokensClose += ds.airdropAmount[gatewayId][salesTokenAddress];
                         ds.airdropAmount[gatewayId][salesTokenAddress] = 0;                        
                     }                   
-                    ITokenERC20(order.salesTokenAddress).burn(order.burnTokensClose); 
+                    ITokenERC20(salesTokenAddress).burn(order.burnTokensClose); 
                     ds.tokensBurned[gatewayId][salesTokenAddress] += order.burnTokensClose;
                     order.burnTokensClose = 0;
                 }
@@ -439,8 +443,8 @@ contract DexApp  {
                         }
                     }
                     processAirdrop(gatewayId, salesTokenAddress, airdropOriginAddress, partialOrderAmount); 
-                    IERC20(order.salesTokenAddress).approve(toAddress, partialOrderAmount);
-                    IERC20(order.salesTokenAddress).transferFrom(address(this), toAddress, partialOrderAmount);
+                    IERC20(salesTokenAddress).approve(toAddress, partialOrderAmount);
+                    IERC20(salesTokenAddress).transferFrom(address(this), toAddress, partialOrderAmount);
                     order.amount -= partialOrderAmount;
                 }
                 remainingValueInAcceptedToken -= partialOrderValue;
@@ -459,6 +463,84 @@ contract DexApp  {
             IAdminApp(address(this)).removeFunctionRole(bytes4(keccak256(bytes("burnFrom(address,uint256)"))), true);                         
             IAdminApp(address(this)).removeFunctionRole(bytes4(keccak256(bytes("createPurchOrder(bytes32,address,bool,uint256,uint256,uint256)"))), true);                          
         }          
+    }
+
+    function getSwapQuoteSalesToken(bytes32 gatewayId, address salesTokenAddress, address tokenIn, uint256 amountIn) external view returns (Quotes memory) {
+        LibDex.DexStorage storage ds = LibDex.domainStorage();
+        LibDex.Gateway memory gateway = ds.gateways[gatewayId];
+
+        require(amountIn > 0, "Need to send native token value to swap");
+        require(ds.sellOrders[gatewayId][salesTokenAddress].length > 0, "There are no token offers at the moment, please try again later.");
+        address swapRouter;
+        LibDex.Quote[] memory quotes;
+
+        uint256 remainingValueInAcceptedToken = 0;
+        if (tokenIn != gateway.onlyReceiveSwapTokenAddres && ds.wrappedNativeTokenAddress != gateway.onlyReceiveSwapTokenAddres) {
+            quotes = this.getSwapQuote(gatewayId, tokenIn == address(0) ? ds.wrappedNativeTokenAddress : tokenIn, amountIn);
+            require(quotes.length > 0, "Unable to get quote from liquidity pool");
+            swapRouter = quotes[0].routerAddress;
+            require(swapRouter != address(0), "There is no liquidity needed in the selected pool.");
+
+            if (tokenIn == address(0)) {
+                tokenIn = ds.wrappedNativeTokenAddress;
+            }
+
+            remainingValueInAcceptedToken= quotes[0].receiveTokenAmount;
+        } else {
+            if (tokenIn == address(0)) {
+                tokenIn = ds.wrappedNativeTokenAddress;
+            }
+            remainingValueInAcceptedToken = amountIn;
+        }
+
+        require(remainingValueInAcceptedToken> 0, "Balance inaccepted token not enough for the exchange.");
+        uint256 diffTokenDecimals = ERC20(salesTokenAddress).decimals() - ERC20(gateway.onlyReceiveSwapTokenAddres).decimals();
+
+        LibDex.Order[] memory sellOrders = ds.sellOrders[gatewayId][salesTokenAddress];
+        uint256 currentOrder = ds.currentOrder[gatewayId][salesTokenAddress];
+        uint256 preOrder = ds.preOrder[gatewayId][salesTokenAddress];
+        uint256 airdropAmount = ds.airdropAmount[gatewayId][salesTokenAddress];
+        uint256 returnAmount = 0;
+        while (remainingValueInAcceptedToken > 0) {
+            LibDex.Order memory order = sellOrders[0];
+            uint256 orderValueInUSD = (order.amount * order.price) / 10**(diffTokenDecimals+ERC20(salesTokenAddress).decimals());
+            if (orderValueInUSD <= remainingValueInAcceptedToken) {
+                remainingValueInAcceptedToken -= orderValueInUSD;
+                if(order.preOrder){
+                    preOrder--;
+                }
+                currentOrder++;
+                if (order.burnTokensClose > 0) {
+                    if (preOrder == 0 && airdropAmount > 0) {
+                        currentOrder = 0;
+                        order.burnTokensClose += airdropAmount;
+                        airdropAmount = 0;                        
+                    }                   
+                    order.burnTokensClose = 0;
+                }
+                returnAmount += order.amount;
+                for (uint256 i = 0; i < sellOrders.length - 1; i++) {
+                    sellOrders[i] = sellOrders[i + 1];
+                }
+                delete sellOrders[sellOrders.length - 1];
+            } else {
+                uint256 partialOrderValue = remainingValueInAcceptedToken;
+                if (remainingValueInAcceptedToken > 0) {
+                    uint256 partialOrderAmount = (remainingValueInAcceptedToken * 10**diffTokenDecimals * 10**ERC20(salesTokenAddress).decimals()) / order.price;
+                    if(partialOrderAmount > order.amount){
+                        partialOrderAmount = order.amount;
+                        remainingValueInAcceptedToken = 0;
+                        partialOrderValue = (order.amount * order.price) / 10**(diffTokenDecimals+ERC20(salesTokenAddress).decimals());
+                    }
+                    order.amount -= partialOrderAmount;
+                    returnAmount += partialOrderAmount;
+                }
+
+                remainingValueInAcceptedToken -= partialOrderValue;
+            }
+        } 
+
+        return Quotes({quotes: quotes, salesTokenAmount: returnAmount});
     }
 
     function getAirdropBalance(bytes32 gatewayId, address salesTokenAddress) external view returns (uint256) {
@@ -595,7 +677,11 @@ contract DexApp  {
 
     function getSalesOrder(bytes32 gatewayId, address salesTokenAddress) public  view returns (LibDex.Order memory){
         LibDex.DexStorage storage ds = LibDex.domainStorage();
-        return ds.sellOrders[gatewayId][salesTokenAddress][0];
+        LibDex.Order memory ret;
+        if(ds.sellOrders[gatewayId][salesTokenAddress].length > 0){
+            ret = ds.sellOrders[gatewayId][salesTokenAddress][0];
+        }
+        return ret;
     }
 
     function getActiveBuyOrders(bytes32 gatewayId, address salesTokenAddress) public view returns (LibDex.Order[] memory) {
