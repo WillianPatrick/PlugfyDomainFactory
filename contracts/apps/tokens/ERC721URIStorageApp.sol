@@ -57,7 +57,7 @@ contract ERC721URIStorageApp {
     event ApprovalForAll(address indexed owner, address indexed spender, bool aproved);
     event Approval(address indexed owner, address indexed spender, uint256 value);
     event Transfer(address indexed from, address indexed to, uint256 value);
-
+    uint256 private nextTokenId = 1;
     function _initERC721URIStorage(string memory _name, string memory _symbol, string memory _baseURI, uint256 _initialSupply, address _initialHolder) public {
         LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
         require(!ds.initialized, "Initialization has already been executed.");
@@ -77,7 +77,7 @@ contract ERC721URIStorageApp {
         ds.totalSupply = _initialSupply;
 
         require(_initialHolder != address(0), "Invalid initial holder address");
-        _transfer(address(0), _initialHolder, _initialSupply);
+        _mintQuantity(_initialHolder, _initialSupply);
     }
 
     function setBaseURI(string memory newBaseURI) public {
@@ -125,22 +125,40 @@ contract ERC721URIStorageApp {
         _setTokenURI(tokenId, _tokenURI);
     }
 
-    function _mint(address to, uint256 tokenId) internal {
+    function _mint(address to) internal {
         LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
         require(to != address(0), "ERC721: mint to the zero address");
+        uint256 tokenId = nextTokenId;
         require(ds.tokenOwner[tokenId] == address(0), "ERC721: token already minted");
         ds.tokenOwner[tokenId] = to;
         ds.ownedTokens[to].push(tokenId);
         ds.tokenIndexInOwnerArray[tokenId] = ds.ownedTokens[to].length - 1;
-        emit Transfer(address(0), to, tokenId);
+        nextTokenId++;
+        emit Transfer(address(0), to, 1);
     }
 
-    function safeMint(address to, uint256 tokenId) public {
-        _mint(to, tokenId);
+    function _mintQuantity(address to, uint256 quantity) internal {
+        LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
+        require(to != address(0), "ERC721: mint to the zero address");
+
+        for (uint256 index = 0; index < quantity; index++) {
+            uint256 tokenId = nextTokenId;
+            require(ds.tokenOwner[tokenId] == address(0), "ERC721: token already minted");
+            ds.tokenOwner[tokenId] = to;
+            ds.ownedTokens[to].push(tokenId);
+            ds.tokenIndexInOwnerArray[tokenId] = ds.ownedTokens[to].length - 1;
+            nextTokenId++;
+        }
+        
+        emit Transfer(address(0), to, quantity);
+    }
+
+    function safeMint(address to) public {
+        _mint(to);
     }
 
     function safeMint(address to, uint256 tokenId, string memory _tokenURI) public {
-        _mint(to, tokenId);
+        _mint(to);
         _setTokenURI(tokenId, _tokenURI);
     }
 
@@ -164,6 +182,8 @@ contract ERC721URIStorageApp {
 
         emit Transfer(from, to, tokenId);
     }
+
+    
 
     function _removeTokenFromOwnerEnumeration(address from, uint256 tokenId) internal {
         LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();

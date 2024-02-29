@@ -149,13 +149,13 @@ contract Domain {
                         iszero(eq(sload(add(ds.slot, senderGuardLock)), 0))
                     )
                 ) {
-                    let ptr := mload(0x40)  // Obtem o ponteiro de memória livre
-                    mstore(ptr, errorSelector)  // Armazena o seletor de erro no início da memória
-                    mstore(add(ptr, 0x04), sload(add(ds.slot, domainGuardLock)))  // Armazena o primeiro valor uint256
-                    mstore(add(ptr, 0x24), sload(add(ds.slot, featureGuardLock)))  // Armazena o segundo valor uint256
-                    mstore(add(ptr, 0x44), sload(add(ds.slot, functionGuardLock)))  // Armazena o terceiro valor uint256
-                    mstore(add(ptr, 0x64), sload(add(ds.slot, senderGuardLock)))  // Armazena o quarto valor uint256
-                    revert(ptr, 0x84)  // Reverte com todos os dados
+                    let ptr := mload(0x40)  
+                    mstore(ptr, errorSelector)  
+                    mstore(add(ptr, 0x04), sload(add(ds.slot, domainGuardLock)))  
+                    mstore(add(ptr, 0x24), sload(add(ds.slot, featureGuardLock)))  
+                    mstore(add(ptr, 0x44), sload(add(ds.slot, functionGuardLock))) 
+                    mstore(add(ptr, 0x64), sload(add(ds.slot, senderGuardLock))) 
+                    revert(ptr, 0x84)  
                 }
                 if and(isDomainReentrancyGuardEnabled,isFunctionReentrancyGuardEnabled) {
                     sstore(add(ds.slot, domainGuardLock),add(sload(add(ds.slot, domainGuardLock)), 1))
