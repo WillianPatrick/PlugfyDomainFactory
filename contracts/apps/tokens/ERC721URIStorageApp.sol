@@ -59,6 +59,7 @@ contract ERC721URIStorageApp {
     event Transfer(address indexed from, address indexed to, uint256 tokenId);
     uint256 private nextTokenId = 1;
 
+
     function _initERC721URIStorage(string memory _name, string memory _symbol, string memory _baseURI, uint256 _initialSupply, address _initialHolder) public {
         LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
         require(!ds.initialized, "Initialization has already been executed.");
@@ -81,14 +82,17 @@ contract ERC721URIStorageApp {
         _mintQuantity(_initialHolder, _initialSupply);
     }
 
-    function setBaseURI(string memory newBaseURI) public {
+    function balanceOf(address owner) public view returns (uint256) {
         LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
-        ds.baseURI = newBaseURI;
+        require(owner != address(0), "ERC721: balance query for the zero address");
+        return ds.ownedTokens[owner].length;
     }
 
-    function baseURI() public view returns (string memory) {
+    function ownerOf(uint256 tokenId) public view returns (address) {
         LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
-        return ds.baseURI;
+        address owner = ds.tokenOwner[tokenId];
+        require(owner != address(0), "ERC721: owner query for nonexistent token");
+        return owner;
     }
 
     function name() public view  returns (string memory)  {
@@ -99,11 +103,6 @@ contract ERC721URIStorageApp {
     function symbol() public view  returns (string memory) {
         LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
         return ds.symbol;
-    }
-
-    function totalSupply() public view  returns (uint256) {
-        LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
-        return ds.totalSupply;
     }
 
     function tokenURI(uint256 tokenId) public view returns (string memory) {
@@ -122,19 +121,93 @@ contract ERC721URIStorageApp {
         return string(abi.encodePacked(base, tokenId));
     }
 
-    function updateTokenURI(uint256 tokenId, string memory _tokenURI) public {
-        _setTokenURI(tokenId, _tokenURI);
+    function baseURI() public view returns (string memory) {
+        LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
+        return ds.baseURI;
     }
 
-    function _mint(address to) internal {
+    function tokenOfOwnerByIndex(address owner, uint256 index) public view returns (uint256) {
+        LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
+        require(index < balanceOf(owner), "ERC721Enumerable: owner index out of bounds");
+        return ds.ownedTokens[owner][index];
+    }
+
+    function totalSupply() public view  returns (uint256) {
+        LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
+        return ds.totalSupply;
+    }
+
+    function tokenByIndex(uint256 index) public view returns (uint256) {
+        require(index < totalSupply(), "ERC721Enumerable: global index out of bounds");
+        return index;
+    }
+
+    function approve(address to, uint256 tokenId) public {
+        _approve(to, tokenId);
+    }
+
+    function getApproved(uint256 tokenId) public view returns (address) {
+        LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
+        require(ds.tokenOwner[tokenId] != address(0), "ERC721: approved query for nonexistent token");
+        return ds.tokenApprovals[tokenId];
+    }
+
+    function setApprovalForAll(address operator, bool approved) public {
+        _setApprovalForAll(operator, approved);
+    }
+
+    function isApprovedForAll(address owner, address operator) public view returns (bool) {
+        LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
+        return ds.operatorApprovals[owner][operator];
+    }
+
+    function transferFrom(address from, address to, uint256 tokenId) public {
+        _transfer(from, to, tokenId);
+    }
+
+    function safeTransferFrom(address from, address to, uint256 tokenId) public {
+        safeTransferFrom(from, to, tokenId, "");
+    }
+
+    function safeTransferFrom(address from, address to, uint256 tokenId, bytes memory _data) public {
+        transferFrom(from, to, tokenId);
+        require(_checkOnERC721Received(from, to, tokenId, _data), "ERC721: transfer to non ERC721Receiver implementer");
+    }
+
+    function _safeTransfer(address from, address to, uint256 tokenId, bytes memory _data) internal {
+        _transfer(from, to, tokenId);
+        require(_checkOnERC721Received(from, to, tokenId, _data), "ERC721: transfer to non ERC721Receiver implementer");
+    }
+
+    function _exists(uint256 tokenId) internal view returns (bool) {
+        LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
+        return ds.tokenOwner[tokenId] != address(0);
+    }
+
+    function _isApprovedOrOwner(address spender, uint256 tokenId) internal view returns (bool) {
+        LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
+        require(ds.tokenOwner[tokenId] != address(0), "ERC721: operator query for nonexistent token");
+        address owner = ds.tokenOwner[tokenId];
+        return (spender == owner || getApproved(tokenId) == spender || isApprovedForAll(owner, spender));
+    }
+
+    function _safeMint(address to, uint256 tokenId) internal {
+        _mint(to, tokenId);
+    }
+
+    function _safeMint(address to, uint256 tokenId, bytes memory _data) internal {
+        _mint(to, tokenId);
+        require(_checkOnERC721Received(address(0), to, tokenId, _data), "ERC721: transfer to non ERC721Receiver implementer");
+    }
+
+    function _mint(address to, uint256 tokenId) internal {
         LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
         require(to != address(0), "ERC721: mint to the zero address");
-        uint256 tokenId = nextTokenId;
-        require(ds.tokenOwner[tokenId] == address(0), "ERC721: token already minted");
+        require(!_exists(tokenId), "ERC721: token already minted");
         ds.tokenOwner[tokenId] = to;
         ds.ownedTokens[to].push(tokenId);
         ds.tokenIndexInOwnerArray[tokenId] = ds.ownedTokens[to].length - 1;
-        nextTokenId++;
+        ds.totalSupply += 1;
         emit Transfer(address(0), to, tokenId);
     }
 
@@ -154,19 +227,23 @@ contract ERC721URIStorageApp {
         emit Transfer(address(0), to, quantity);
     }
 
-    function safeMint(address to) public {
-        _mint(to);
-    }
-
-    function safeMint(address to, uint256 tokenId, string memory _tokenURI) public {
-        _mint(to);
-        _setTokenURI(tokenId, _tokenURI);
-    }
-
-    function _setTokenURI(uint256 tokenId, string memory _tokenURI) internal {
+    function _burn(uint256 tokenId) internal {
         LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
-        require(ds.tokenOwner[tokenId] != address(0), "ERC721URIStorage: URI set of nonexistent token");
-        ds.tokenURIs[tokenId] = _tokenURI;
+        address owner = ownerOf(tokenId);
+
+        _approve(address(0), tokenId);
+        _removeTokenFromOwnerEnumeration(owner, tokenId);
+
+        uint256 tokenIndex = ds.tokenIndexInOwnerArray[tokenId];
+        uint256 lastTokenIndex = ds.ownedTokens[owner].length - 1;
+        uint256 lastTokenId = ds.ownedTokens[owner][lastTokenIndex];
+
+        ds.tokenOwner[tokenId] = address(0);
+        ds.ownedTokens[owner][tokenIndex] = lastTokenId;
+        ds.tokenIndexInOwnerArray[lastTokenId] = tokenIndex;
+        ds.ownedTokens[owner].pop();
+        ds.totalSupply -= 1;
+        emit Transfer(owner, address(0), tokenId);
     }
 
     function _transfer(address from, address to, uint256 tokenId) internal {
@@ -212,59 +289,15 @@ contract ERC721URIStorageApp {
         emit Approval(ds.tokenOwner[tokenId], to, tokenId);
     }
 
-    function transferFrom(address from, address to, uint256 tokenId) public {
-        //solhint-disable-next-line max-line-length
-        require(_isApprovedOrOwner(_msgSender(), tokenId), "ERC721: transfer caller is not owner nor approved");
-
-        _transfer(from, to, tokenId);
-    }
-
-    function _isApprovedOrOwner(address spender, uint256 tokenId) internal view returns (bool) {
+    function _setTokenURI(uint256 tokenId, string memory _tokenURI) internal {
         LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
-        require(ds.tokenOwner[tokenId] != address(0), "ERC721: operator query for nonexistent token");
-        address owner = ds.tokenOwner[tokenId];
-        return (spender == owner || getApproved(tokenId) == spender || isApprovedForAll(owner, spender));
+        require(ds.tokenOwner[tokenId] != address(0), "ERC721URIStorage: URI set of nonexistent token");
+        ds.tokenURIs[tokenId] = _tokenURI;
     }
 
-    function getApproved(uint256 tokenId) public view returns (address) {
+    function _setBaseURI(string memory baseURI_) internal {
         LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
-        require(ds.tokenOwner[tokenId] != address(0), "ERC721: approved query for nonexistent token");
-        return ds.tokenApprovals[tokenId];
-    }
-
-    function isApprovedForAll(address owner, address operator) public view returns (bool) {
-        LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
-        return ds.operatorApprovals[owner][operator];
-    }
-
-    function setApprovalForAll(address operator, bool approved) public {
-        LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
-        require(operator != _msgSender(), "ERC721: approve to caller");
-
-        ds.operatorApprovals[_msgSender()][operator] = approved;
-        emit ApprovalForAll(_msgSender(), operator, approved);
-    }
-
-    function balanceOf(address owner) public view returns (uint256) {
-        LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
-        require(owner != address(0), "ERC721: balance query for the zero address");
-        return ds.ownedTokens[owner].length;
-    }
-
-    function ownerOf(uint256 tokenId) public view returns (address) {
-        LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
-        address owner = ds.tokenOwner[tokenId];
-        require(owner != address(0), "ERC721: owner query for nonexistent token");
-        return owner;
-    }
-
-    function safeTransferFrom(address from, address to, uint256 tokenId) public {
-        safeTransferFrom(from, to, tokenId, "");
-    }
-
-    function safeTransferFrom(address from, address to, uint256 tokenId, bytes memory _data) public {
-        transferFrom(from, to, tokenId);
-        require(_checkOnERC721Received(from, to, tokenId, _data), "ERC721: transfer to non ERC721Receiver implementer");
+        ds.baseURI = baseURI_;
     }
 
     function _checkOnERC721Received(address from, address to, uint256 tokenId, bytes memory _data) internal returns (bool) {
@@ -278,4 +311,19 @@ contract ERC721URIStorageApp {
     function _msgSender() internal view returns (address) {
         return msg.sender;
     }
+
+    function supportsInterface(bytes4 interfaceId) public pure returns (bool) {
+        return interfaceId == 0x80ac58cd || interfaceId == 0x5b5e139f || interfaceId == 0x6466353c || interfaceId == 0x780e9d63;
+    }
+
+    function _setApprovalForAll(address operator, bool approved) internal {
+        LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
+        require(operator != _msgSender(), "ERC721: approve to caller");
+        ds.operatorApprovals[_msgSender()][operator] = approved;
+        emit ApprovalForAll(_msgSender(), operator, approved);
+    }
+
+    function _beforeTokenTransfer(address from, address to, uint256 tokenId) internal {}
+
+
 }
