@@ -54,10 +54,11 @@ library LibTokenERC721URIStorage {
 contract ERC721URIStorageApp {
     using Address for address;
     event ValueReceived(address user, uint amount);
-    event ApprovalForAll(address indexed owner, address indexed spender, bool aproved);
-    event Approval(address indexed owner, address indexed spender, uint256 value);
-    event Transfer(address indexed from, address indexed to, uint256 value);
+    event ApprovalForAll(address indexed owner, address indexed spender, bool approved);
+    event Approval(address indexed owner, address indexed spender, uint256 tokenId);
+    event Transfer(address indexed from, address indexed to, uint256 tokenId);
     uint256 private nextTokenId = 1;
+
     function _initERC721URIStorage(string memory _name, string memory _symbol, string memory _baseURI, uint256 _initialSupply, address _initialHolder) public {
         LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
         require(!ds.initialized, "Initialization has already been executed.");
@@ -134,7 +135,7 @@ contract ERC721URIStorageApp {
         ds.ownedTokens[to].push(tokenId);
         ds.tokenIndexInOwnerArray[tokenId] = ds.ownedTokens[to].length - 1;
         nextTokenId++;
-        emit Transfer(address(0), to, 1);
+        emit Transfer(address(0), to, tokenId);
     }
 
     function _mintQuantity(address to, uint256 quantity) internal {
@@ -182,8 +183,6 @@ contract ERC721URIStorageApp {
 
         emit Transfer(from, to, tokenId);
     }
-
-    
 
     function _removeTokenFromOwnerEnumeration(address from, uint256 tokenId) internal {
         LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
@@ -244,6 +243,36 @@ contract ERC721URIStorageApp {
 
         ds.operatorApprovals[_msgSender()][operator] = approved;
         emit ApprovalForAll(_msgSender(), operator, approved);
+    }
+
+    function balanceOf(address owner) public view returns (uint256) {
+        LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
+        require(owner != address(0), "ERC721: balance query for the zero address");
+        return ds.ownedTokens[owner].length;
+    }
+
+    function ownerOf(uint256 tokenId) public view returns (address) {
+        LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
+        address owner = ds.tokenOwner[tokenId];
+        require(owner != address(0), "ERC721: owner query for nonexistent token");
+        return owner;
+    }
+
+    function safeTransferFrom(address from, address to, uint256 tokenId) public {
+        safeTransferFrom(from, to, tokenId, "");
+    }
+
+    function safeTransferFrom(address from, address to, uint256 tokenId, bytes memory _data) public {
+        transferFrom(from, to, tokenId);
+        require(_checkOnERC721Received(from, to, tokenId, _data), "ERC721: transfer to non ERC721Receiver implementer");
+    }
+
+    function _checkOnERC721Received(address from, address to, uint256 tokenId, bytes memory _data) internal returns (bool) {
+        if (!to.isContract()) {
+            return true;
+        }
+        bytes4 retval = IERC721Receiver(to).onERC721Received(_msgSender(), from, tokenId, _data);
+        return (retval == IERC721Receiver(to).onERC721Received.selector);
     }
 
     function _msgSender() internal view returns (address) {
