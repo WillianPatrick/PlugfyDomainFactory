@@ -137,7 +137,7 @@ async function main() {
   //totalCost = totalCost.add(ethers.utils.parseEther(await initializeFeature('ReentrancyGuardApp','_initReentrancyGuard', ERC721URIStorageAppFeature.address, [])));
 
 
-await initializeFeature('ERC721URIStorageApp','_initERC721URIStorage', ERC721URIStorageAppFeature.address, ["Vick Ai NFT Collection #1", "VKN1", `http://nft.vick.ai/${ERC721URIStorageAppFeature.address}`, 100, owner.address]);
+await initializeFeature('ERC721URIStorageApp','_initERC721URIStorage', ERC721URIStorageAppFeature.address, ["Vick Ai NFT Collection #1", "VKN1", `https://ipfs.io/ipfs/`, `http://localhost:5000/nft/getImage/`, 10000, owner.address]);
   //string memory _name, string memory _symbol, string memory _baseURI, uint256 _initialSupply, address _initialHolder
 
   // const featureManagerApp_Update = await featureManagerAppDomain.FeatureManager([[dexApp.address,1,[getSelector(dexApp, "swapTokenWithRouter(bytes32,address,address,address,uint256,address,address)"),getSelector(dexApp, "getSalesOrder(bytes32,address)")]],[dexApp.address,0,[getSelector(dexApp, "getSwapQuoteSalesToken(bytes32,address,address,uint256)")]]],"0x0000000000000000000000000000000000000000","0x00000000","0x00",false,{nonce: nonce, gasPrice: gasPrice.add(ethers.utils.parseUnits("10", "gwei"))});

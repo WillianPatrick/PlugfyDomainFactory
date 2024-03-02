@@ -35,11 +35,14 @@ library LibTokenERC721URIStorage {
         mapping(uint256 => uint256) tokenIndexInOwnerArray;
         mapping(uint256 => address) tokenOwner;
         uint256 totalSupply;
+        uint256 totalSeedNFTsSupply;
         uint256 tokenIdTracker;
         address owner;
+        address initialHolder;
         mapping(bytes32 => mapping(address => bool)) roles;
         bool initialized;
         bool paused;
+        string baseTempURI;
         string baseURI;
     }
 
@@ -60,7 +63,7 @@ contract ERC721URIStorageApp {
     uint256 private nextTokenId = 1;
 
 
-    function _initERC721URIStorage(string memory _name, string memory _symbol, string memory _baseURI, uint256 _initialSupply, address _initialHolder) public {
+    function _initERC721URIStorage(string memory _name, string memory _symbol, string memory _baseTempURI, string memory _baseDescentralizedURI, uint256 _totalSeedNFTsSupply, address _initialHolder) public {
         LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
         require(!ds.initialized, "Initialization has already been executed.");
 
@@ -73,27 +76,42 @@ contract ERC721URIStorageApp {
         
         ds.name = _name;
         ds.symbol = _symbol;
-        ds.baseURI = _baseURI;
+        ds.baseURI = _baseDescentralizedURI;
+        ds.baseTempURI = _baseTempURI;
         ds.initialized = true;
         ds.owner = msg.sender;
-        ds.totalSupply = _initialSupply;
-
+        ds.initialHolder = _initialHolder;
+        ds.totalSeedNFTsSupply = _totalSeedNFTsSupply;
+        ds.totalSupply = _totalSeedNFTsSupply;
         require(_initialHolder != address(0), "Invalid initial holder address");
-        _mintQuantity(_initialHolder, _initialSupply);
     }
 
     function balanceOf(address owner) public view returns (uint256) {
         LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
         require(owner != address(0), "ERC721: balance query for the zero address");
-        return ds.ownedTokens[owner].length;
+
+        uint256 balance = ds.ownedTokens[owner].length;
+
+        if (ds.initialHolder == owner) {
+            balance += ds.totalSeedNFTsSupply;
+        }
+
+        return balance;
     }
 
     function ownerOf(uint256 tokenId) public view returns (address) {
         LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
-        address owner = ds.tokenOwner[tokenId];
+        address owner = ds.tokenOwner[tokenId-1];
+
+        if (owner == address(0) && tokenId <= ds.totalSupply) {
+            return ds.initialHolder;
+        }
+
         require(owner != address(0), "ERC721: owner query for nonexistent token");
         return owner;
     }
+
+
 
     function name() public view  returns (string memory)  {
         LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
@@ -106,19 +124,41 @@ contract ERC721URIStorageApp {
     }
 
     function tokenURI(uint256 tokenId) public view returns (string memory) {
-        LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
-        string memory _tokenURI = ds.tokenURIs[tokenId];
-        string memory base = baseURI();
-        
-        if (bytes(base).length == 0) {
-            return _tokenURI;
-        }
+        require(tokenId > 0 && tokenId <= totalSupply(), "ERC721Enumerable: token ID out of bounds");
 
+        // Obtém o armazenamento de URI do token
+        LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
+        string memory _tokenURI = ds.tokenURIs[tokenId - 1];
+        
+        // Obtém as URIs base
+        string memory base = baseURI();
+        string memory baseTemp = baseTempURI();
+
+        // Concatena a URI base com a URI do token ou com uma URI temporária
         if (bytes(_tokenURI).length > 0) {
             return string(abi.encodePacked(base, _tokenURI));
+        } else {
+            return string(abi.encodePacked(baseTemp, address(this), toString(tokenId), address(msg.sender)));
         }
+    }
 
-        return string(abi.encodePacked(base, tokenId));
+    function toString(uint256 value) internal pure returns (string memory) {
+        if (value == 0) {
+            return "0";
+        }
+        uint256 temp = value;
+        uint256 digits;
+        while (temp != 0) {
+            digits++;
+            temp /= 10;
+        }
+        bytes memory buffer = new bytes(digits);
+        while (value != 0) {
+            digits -= 1;
+            buffer[digits] = bytes1(uint8(48 + uint256(value % 10)));
+            value /= 10;
+        }
+        return string(buffer);
     }
 
     function baseURI() public view returns (string memory) {
@@ -126,10 +166,15 @@ contract ERC721URIStorageApp {
         return ds.baseURI;
     }
 
+    function baseTempURI() public view returns (string memory) {
+        LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
+        return ds.baseURI;
+    }
+
     function tokenOfOwnerByIndex(address owner, uint256 index) public view returns (uint256) {
         LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
         require(index < balanceOf(owner), "ERC721Enumerable: owner index out of bounds");
-        return ds.ownedTokens[owner][index];
+        return index+1;
     }
 
     function totalSupply() public view  returns (uint256) {
@@ -139,7 +184,7 @@ contract ERC721URIStorageApp {
 
     function tokenByIndex(uint256 index) public view returns (uint256) {
         require(index < totalSupply(), "ERC721Enumerable: global index out of bounds");
-        return index;
+        return index+1;
     }
 
     function approve(address to, uint256 tokenId) public {
@@ -148,8 +193,13 @@ contract ERC721URIStorageApp {
 
     function getApproved(uint256 tokenId) public view returns (address) {
         LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
-        require(ds.tokenOwner[tokenId] != address(0), "ERC721: approved query for nonexistent token");
-        return ds.tokenApprovals[tokenId];
+        address owner = ds.tokenOwner[tokenId-1];
+        if(owner == address(0) && tokenId < ds.totalSupply)
+            owner = ds.initialHolder;
+
+        require(owner != address(0), "ERC721: operator query for nonexistent token");
+
+        return ds.tokenApprovals[tokenId-1];
     }
 
     function setApprovalForAll(address operator, bool approved) public {
@@ -162,7 +212,22 @@ contract ERC721URIStorageApp {
     }
 
     function transferFrom(address from, address to, uint256 tokenId) public {
-        _transfer(from, to, tokenId);
+        LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
+
+        address owner = ds.tokenOwner[tokenId-1];
+        if(owner == address(0) && tokenId < ds.totalSupply)
+            owner = ds.initialHolder;
+        require(owner != address(0), "ERC721: operator query for nonexistent token");
+
+        require(owner == from, "ERC721: transfer of token that is not own");
+        require(to != address(0), "ERC721: transfer to the zero address");
+
+        if (ds.tokenOwner[tokenId-1] == address(0)) {
+            _safeMint(to, tokenId);
+        }
+        else{
+            _transfer(from, to, tokenId);
+        }
     }
 
     function safeTransferFrom(address from, address to, uint256 tokenId) public {
@@ -175,19 +240,23 @@ contract ERC721URIStorageApp {
     }
 
     function _safeTransfer(address from, address to, uint256 tokenId, bytes memory _data) internal {
-        _transfer(from, to, tokenId);
+        transferFrom(from, to, tokenId);
         require(_checkOnERC721Received(from, to, tokenId, _data), "ERC721: transfer to non ERC721Receiver implementer");
     }
 
-    function _exists(uint256 tokenId) internal view returns (bool) {
+    function exists(uint256 tokenId) public view returns (bool) {
         LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
-        return ds.tokenOwner[tokenId] != address(0);
+        return ds.tokenOwner[tokenId-1] != address(0);
     }
 
     function _isApprovedOrOwner(address spender, uint256 tokenId) internal view returns (bool) {
         LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
-        require(ds.tokenOwner[tokenId] != address(0), "ERC721: operator query for nonexistent token");
-        address owner = ds.tokenOwner[tokenId];
+
+        address owner = ds.tokenOwner[tokenId-1];
+        if(owner == address(0) && tokenId < ds.totalSupply)
+            owner = ds.initialHolder;
+        require(owner != address(0), "ERC721: operator query for nonexistent token");
+
         return (spender == owner || getApproved(tokenId) == spender || isApprovedForAll(owner, spender));
     }
 
@@ -203,28 +272,13 @@ contract ERC721URIStorageApp {
     function _mint(address to, uint256 tokenId) internal {
         LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
         require(to != address(0), "ERC721: mint to the zero address");
-        require(!_exists(tokenId), "ERC721: token already minted");
-        ds.tokenOwner[tokenId] = to;
+        require(!exists(tokenId), "ERC721: token already minted");
+        ds.tokenOwner[tokenId-1] = to;
         ds.ownedTokens[to].push(tokenId);
-        ds.tokenIndexInOwnerArray[tokenId] = ds.ownedTokens[to].length - 1;
+        ds.tokenIndexInOwnerArray[tokenId-1] = ds.ownedTokens[to].length - 1;
         ds.totalSupply += 1;
+        ds.totalSeedNFTsSupply -=1;
         emit Transfer(address(0), to, tokenId);
-    }
-
-    function _mintQuantity(address to, uint256 quantity) internal {
-        LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
-        require(to != address(0), "ERC721: mint to the zero address");
-
-        for (uint256 index = 0; index < quantity; index++) {
-            uint256 tokenId = nextTokenId;
-            require(ds.tokenOwner[tokenId] == address(0), "ERC721: token already minted");
-            ds.tokenOwner[tokenId] = to;
-            ds.ownedTokens[to].push(tokenId);
-            ds.tokenIndexInOwnerArray[tokenId] = ds.ownedTokens[to].length - 1;
-            nextTokenId++;
-        }
-        
-        emit Transfer(address(0), to, quantity);
     }
 
     function _burn(uint256 tokenId) internal {
@@ -234,11 +288,11 @@ contract ERC721URIStorageApp {
         _approve(address(0), tokenId);
         _removeTokenFromOwnerEnumeration(owner, tokenId);
 
-        uint256 tokenIndex = ds.tokenIndexInOwnerArray[tokenId];
+        uint256 tokenIndex = ds.tokenIndexInOwnerArray[tokenId-1];
         uint256 lastTokenIndex = ds.ownedTokens[owner].length - 1;
         uint256 lastTokenId = ds.ownedTokens[owner][lastTokenIndex];
 
-        ds.tokenOwner[tokenId] = address(0);
+        ds.tokenOwner[tokenId-1] = address(0);
         ds.ownedTokens[owner][tokenIndex] = lastTokenId;
         ds.tokenIndexInOwnerArray[lastTokenId] = tokenIndex;
         ds.ownedTokens[owner].pop();
@@ -249,23 +303,27 @@ contract ERC721URIStorageApp {
     function _transfer(address from, address to, uint256 tokenId) internal {
         LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
 
-        require(ds.tokenOwner[tokenId] == from, "ERC721: transfer of token that is not own");
+        address owner = ds.tokenOwner[tokenId-1];
+        if(owner == address(0) && tokenId < ds.totalSupply)
+            owner = ds.initialHolder;
+
+        require(owner == from, "ERC721: transfer of token that is not own");
         require(to != address(0), "ERC721: transfer to the zero address");
 
         _approve(address(0), tokenId);
         _removeTokenFromOwnerEnumeration(from, tokenId);
         _addTokenToOwnerEnumeration(to, tokenId);
 
-        ds.tokenOwner[tokenId] = to;
+        ds.tokenOwner[tokenId-1] = to;
 
         emit Transfer(from, to, tokenId);
     }
 
     function _removeTokenFromOwnerEnumeration(address from, uint256 tokenId) internal {
         LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
-
+        
         uint256 lastTokenIndex = ds.ownedTokens[from].length - 1;
-        uint256 tokenIndex = ds.tokenIndexInOwnerArray[tokenId];
+        uint256 tokenIndex = ds.tokenIndexInOwnerArray[tokenId-1];
 
         if (tokenIndex != lastTokenIndex) {
             uint256 lastTokenId = ds.ownedTokens[from][lastTokenIndex];
@@ -279,25 +337,36 @@ contract ERC721URIStorageApp {
 
     function _addTokenToOwnerEnumeration(address to, uint256 tokenId) internal {
         LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
-        ds.tokenIndexInOwnerArray[tokenId] = ds.ownedTokens[to].length;
+        ds.tokenIndexInOwnerArray[tokenId-1] = ds.ownedTokens[to].length;
         ds.ownedTokens[to].push(tokenId);
     }
 
     function _approve(address to, uint256 tokenId) internal {
         LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
-        ds.tokenApprovals[tokenId] = to;
-        emit Approval(ds.tokenOwner[tokenId], to, tokenId);
+        ds.tokenApprovals[tokenId-1] = to;
+        emit Approval(ds.tokenOwner[tokenId-1], to, tokenId);
     }
 
-    function _setTokenURI(uint256 tokenId, string memory _tokenURI) internal {
+    function setTokenURI(uint256 tokenId, string memory _tokenURI) public {
         LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
-        require(ds.tokenOwner[tokenId] != address(0), "ERC721URIStorage: URI set of nonexistent token");
-        ds.tokenURIs[tokenId] = _tokenURI;
+        address owner = ds.tokenOwner[tokenId-1];
+        if(owner == address(0) && tokenId < ds.totalSupply)
+            owner = ds.initialHolder;
+        require(owner != address(0), "ERC721: operator query for nonexistent token");
+        require(owner == _msgSender() || ds.owner == _msgSender(), "ERC721: token that is not owner");
+        ds.tokenURIs[tokenId-1] = _tokenURI;
     }
 
-    function _setBaseURI(string memory baseURI_) internal {
+    function setBaseURI(string memory baseURI_) public {
         LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
+        require(ds.owner == _msgSender(), "ERC721: token that is not owner");
         ds.baseURI = baseURI_;
+    }
+
+    function setBaseTempURI(string memory baseTempURI_) public {
+        LibTokenERC721URIStorage.TokenData storage ds = LibTokenERC721URIStorage.domainStorage();
+        require(ds.owner == _msgSender(), "ERC721: token that is not owner");
+        ds.baseTempURI = baseTempURI_;
     }
 
     function _checkOnERC721Received(address from, address to, uint256 tokenId, bytes memory _data) internal returns (bool) {
